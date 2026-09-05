@@ -1,0 +1,363 @@
+/* Configuración General */
+body {
+    background-color: #7a1e2c; /* Tu color guinda */
+    margin: 0;
+    font-family: 'Roboto', Arial, sans-serif;
+}
+
+
+
+:root {
+    --bordo: #7D1F2D;
+    --dorado: #A88B4A;
+    --gris-fondo: #F4F4F4;
+}
+
+
+
+/* Franja superior con recorte */
+.linea-bordo {
+    background-color: var(--bordo);
+    height: 250px;
+    
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    color: white;
+}
+
+.boton-regresar {
+    position: absolute;
+    top: 20px;
+    left: 20px;
+    color: white;
+    font-size: 1.5rem;
+    text-decoration: none;
+}
+
+.logo-vinculo {
+    width: 80px;
+    height: auto;
+    border-radius: 50%;
+    margin-top: 10px;
+}
+
+/* Formulario */
+.contenedor-datos {
+    max-width: 400px;
+    margin: -40px auto 0; /* Sube un poco para entrar en el recorte */
+    padding: 20px;
+    background: white;
+    border-radius: 10px;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+}
+
+.campo {
+    margin-bottom: 15px;
+    display: flex;
+    flex-direction: column;
+}
+
+label {
+    font-weight: bold;
+    color: var(--bordo);
+    margin-bottom: 5px;
+}
+
+input {
+    padding: 10px;
+    border: 1px solid #ccc;
+    border-radius: 5px;
+}
+
+/* Botón de Google */
+.google-btn-falso {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    background-color: white;
+    border: 1px solid #ddd;
+    padding: 10px;
+    border-radius: 5px;
+    cursor: pointer;
+    margin-top: 10px;
+    transition: 0.3s;
+}
+
+.google-btn-falso:hover {
+    background-color: #f1f1f1;
+}
+
+.fa-google {
+    color: #4285F4; 
+    font-size: 1.2rem;
+}
+
+.btn-iniciar {
+    width: 100%;
+    background-color: var(--bordo);
+    color: white;
+    border: none;
+    padding: 12px;
+    margin-top: 20px;
+    border-radius: 5px;
+    font-weight: bold;
+    cursor: pointer;
+}
+
+/* ==========================================================================
+   RESPONSIVE GENERAL
+   ========================================================================== */
+
+/* TABLETS */
+@media (max-width: 1024px) {
+    .content-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .feedback-cards {
+        flex-wrap: wrap;
+    }
+
+    .card {
+        min-width: 220px;
+    }
+
+    .main-content-layout {
+        flex-direction: column;
+        width: 100%;
+    }
+
+    .right-column,
+    .left-column {
+        width: 100%;
+    }
+}
+
+/* CELULARES */
+@media (max-width: 768px) {
+
+    body {
+        overflow-x: hidden;
+    }
+
+    /* Para dashboards */
+    .dashboard-container {
+        flex-direction: column;
+        min-height: 100vh;
+    }
+
+    /* Para pantallas de chat */
+    .app-container {
+        flex-direction: column;
+        height: 100vh;
+        overflow: hidden;
+    }
+
+    /* Sidebar se convierte en barra superior */
+    .sidebar {
+        width: 100%;
+        height: 70px;
+        min-height: 70px;
+        padding-top: 0;
+        position: sticky;
+        top: 0;
+        z-index: 1000;
+        flex-direction: row;
+        justify-content: center;
+    }
+
+    .nav-icons {
+        flex-direction: row;
+        justify-content: center;
+        align-items: center;
+        gap: 25px;
+        width: 100%;
+    }
+
+    .sidebar-link {
+        width: auto;
+    }
+
+    .nav-item {
+        width: 45px;
+        height: 45px;
+    }
+
+    .nav-item i {
+        font-size: 1.5rem;
+    }
+
+    .tooltip-text {
+        display: none;
+    }
+
+    /* Contenido dashboard */
+    .main-content {
+        padding: 20px;
+        overflow-y: auto;
+    }
+
+    .feedback-cards {
+        flex-direction: column;
+    }
+
+    .card {
+        width: 100%;
+        min-height: 150px;
+    }
+
+    .content-grid {
+        grid-template-columns: 1fr;
+        gap: 20px;
+    }
+
+    .recompensas-box,
+    .historial-container,
+    .calendar-container {
+        border-radius: 25px;
+    }
+
+    .historial-item {
+        padding: 12px;
+    }
+
+    /* Chat */
+    .chat-sidebar {
+        width: 100%;
+        height: 210px;
+        flex-shrink: 0;
+    }
+
+    .contacts-list {
+        overflow-y: auto;
+    }
+
+    .contact-item {
+        min-height: 80px;
+        padding: 12px 15px;
+    }
+
+    .chat-window {
+        flex: 1;
+        min-height: 0;
+    }
+
+    .chat-header {
+        padding: 12px 18px;
+    }
+
+    .messages-container {
+        padding: 20px;
+        gap: 18px;
+    }
+
+    .msg-tutor,
+    .msg-alumno {
+        max-width: 95%;
+    }
+
+    .chat-input-bar {
+        padding: 12px;
+        gap: 10px;
+    }
+
+    .chat-input-bar input {
+        font-size: 13px;
+        padding: 9px 14px;
+    }
+
+    .btn-enviar {
+        padding: 9px 18px;
+    }
+}
+
+/* CELULARES PEQUEÑOS */
+@media (max-width: 480px) {
+
+    .nav-icons {
+        gap: 18px;
+    }
+
+    .nav-item i {
+        font-size: 1.3rem;
+    }
+
+    .main-content {
+        padding: 15px;
+    }
+
+    h2,
+    .progress-title {
+        font-size: 1.4rem;
+        text-align: center;
+    }
+
+    .feedback-cards {
+        gap: 12px;
+    }
+
+    .card {
+        min-height: 130px;
+        padding: 15px;
+    }
+
+    .progress-circle {
+        width: 75px;
+        height: 75px;
+        font-size: 0.9rem;
+    }
+
+    .historial-container,
+    .calendar-container {
+        padding: 18px;
+    }
+
+    .calendar-grid span {
+        padding: 8px;
+        font-size: 0.75rem;
+    }
+
+    .chat-sidebar {
+        height: 190px;
+    }
+
+    .search-container {
+        padding: 10px;
+    }
+
+    .contact-avatar {
+        width: 45px;
+        height: 45px;
+    }
+
+    .contact-info h4 {
+        font-size: 0.85rem;
+    }
+
+    .contact-info .last-msg {
+        font-size: 0.75rem;
+    }
+
+    .messages-container {
+        padding: 15px;
+    }
+
+    .bubble,
+    .msg-content {
+        padding: 12px 15px;
+    }
+
+    .chat-input-bar {
+        flex-wrap: nowrap;
+    }
+
+    .btn-enviar {
+        padding: 8px 12px;
+        font-size: 0.8rem;
+    }
+}
