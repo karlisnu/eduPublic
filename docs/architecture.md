@@ -2,7 +2,7 @@
 
 ## Current milestone
 
-Edu-Match is currently a static frontend prototype served from `Alumnos/html`. The Dev Container provides the reproducible development environment and PostgreSQL service required for the integration phase.
+EDU-EduMatch is currently a static frontend prototype served from `Alumnos/html`. The Dev Container provides the reproducible development environment and MySQL service required for the integration phase.
 
 ## Components
 
@@ -11,7 +11,7 @@ Edu-Match is currently a static frontend prototype served from `Alumnos/html`. T
 | Frontend pages | `Alumnos/html/` | Student and tutor views, forms, dashboards, and navigation |
 | Frontend scripts | `js/` | Login, tutor search, filtering, and UI behavior |
 | Frontend command | `frontend/package.json` | Serves the prototype on port 5173 |
-| Database service | `.devcontainer/docker-compose.yml` | PostgreSQL database `appdb` on service host `db` |
+| Database service | `.devcontainer/docker-compose.yml` | MySQL database `appdb` on service host `db` |
 | Development environment | `.devcontainer/` | Identical tools and setup for every contributor |
 
 ## Domain model
@@ -36,5 +36,5 @@ Authentication, registration, and persistence will be added after the read-only 
 ```text
 Browser :5173 -> frontend static server
 Backend :8000  -> future API service
-Backend -> db:5432/appdb -> PostgreSQL
+Backend -> db:3306/appdb -> MySQL
 ```

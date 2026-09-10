@@ -1,6 +1,6 @@
 ---
 name: Feature request
-about: Propose an improvement for Edu-Match
+about: Propose an improvement for EDU-EduMatch
 title: "[Feature] "
 labels: enhancement
 assignees: ""

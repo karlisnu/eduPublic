@@ -1,6 +1,6 @@
 ---
 name: Project Proposal
-about: Define the problem, entities, and relationship for the Edu-Match project
+about: Define the problem, entities, and relationship for the EDU-EduMatch project
 title: "Project Proposal"
 labels: proposal
 assignees: ""
@@ -8,7 +8,7 @@ assignees: ""
 
 ## Problem solved in 30 seconds
 
-<!-- Explain who has the problem, what they need, and how Edu-Match helps. -->
+<!-- Explain who has the problem, what they need, and how EDU-EduMatch helps. -->
 
 ## Primary entity
 

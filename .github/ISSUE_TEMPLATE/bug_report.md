@@ -1,6 +1,6 @@
 ---
 name: Bug report
-about: Report a reproducible problem in Edu-Match
+about: Report a reproducible problem in EDU-EduMatch
 title: "[Bug] "
 labels: bug
 assignees: ""

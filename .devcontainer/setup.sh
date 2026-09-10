@@ -1,13 +1,25 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+git config --global --add safe.directory /workspace
+
 if [[ -f frontend/package.json ]]; then
   npm --prefix frontend install
 fi
 
-until pg_isready -h db -U dev -d appdb >/dev/null 2>&1; do
-  echo "Waiting for PostgreSQL..."
+node --version
+npm --version
+
+for attempt in {1..60}; do
+  if mysqladmin ping -h db -u dev -pdev --silent >/dev/null 2>&1; then
+    mysql -h db -u dev -pdev appdb -e "SELECT 1;" >/dev/null
+    echo "Development environment ready."
+    exit 0
+  fi
+
+  echo "Waiting for MySQL..."
   sleep 2
 done
 
-echo "Development environment ready."
+echo "MySQL did not become available after 120 seconds." >&2
+exit 1
