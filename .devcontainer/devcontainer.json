@@ -1,32 +1,17 @@
-// For format details, see https://aka.ms/devcontainer.json. For config options, see the
-// README at: https://github.com/devcontainers/templates/tree/main/src/dotnet-mssql
 {
-  "name": ".NET (C#), Node.js (TypeScript) & MS SQL",
+  "name": "EDU-EduMatch Development",
   "dockerComposeFile": "docker-compose.yml",
   "service": "app",
   "workspaceFolder": "/workspace",
+  "forwardPorts": [5173, "db:3306", 8000],
+  "postCreateCommand": "bash .devcontainer/setup.sh",
   "features": {
     "ghcr.io/devcontainers/features/github-cli:1": {}
   },
   "customizations": {
     "vscode": {
-      "settings": {
-        "mssql.connections": [
-          {
-            "server": "localhost,1433",
-            "database": "",
-            "authenticationType": "SqlLogin",
-            "user": "sa",
-            "password": "P@ssw0rd",
-            "emptyPasswordInput": false,
-            "savePassword": false,
-            "profileName": "mssql-container"
-          }
-        ]
-      },
       "extensions": [
         "ms-dotnettools.csharp",
-        "ms-mssql.mssql",
         "anthropic.claude-code"
       ]
     }

@@ -1,10 +1,10 @@
-# Project Context: Edu-Match
-You are an expert software engineering assistant developing "Edu-Match", a university tutoring web platform. The system connects students with tutors to provide academic support. The project is in the integration phase (transitioning from a Frontend prototype to a Full-Stack system).
+# Project Context: EDU-EduMatch
+You are an expert software engineering assistant developing "EDU-EduMatch", a university tutoring web platform. The system connects students with tutors to provide academic support. The project is in the integration phase (transitioning from a Frontend prototype to a Full-Stack system).
 
 # Tech Stack and Environment
 - Frontend: HTML5, CSS3, JavaScript (ES6) (architecture based on static visual components).
 - Backend (Integration): Node.js.
-- Database: Microsoft SQL Server (T-SQL).
+- Database: MySQL.
 - Development Environment: Dev Containers (Docker) and WSL 2.
 - Workflow: GitFlow and Scrum methodologies.
 
@@ -15,7 +15,7 @@ You are an expert software engineering assistant developing "Edu-Match", a unive
    - When generating authentication or routing logic (FR-03), always assume that the interface flows and dashboards (FR-06, FR-07) are completely distinct for each role.
 
 2. **Frontend and File Structure:**
-   - Respect the existing directory structure (e.g., `Alumnos/html/`, `js/`, `imagenes/`).
+   - Respect the existing directory structure (e.g., `Alumnos/html/`, `js/`, `assets/`).
    - The design must be strictly responsive (FR-10). Use UI/UX best practices (NFR-01) to ensure intuitive navigation.
 
 3. **Data Validation (FR-09):**
@@ -24,7 +24,7 @@ You are an expert software engineering assistant developing "Edu-Match", a unive
 
 4. **Backend and Database Integration:**
    - Write modular and scalable JavaScript code (NFR-06) prepared to make HTTP requests (fetch/Axios) to the Node.js backend.
-   - If suggesting database schemas or T-SQL queries to store profiles, ratings (FR-04), or messages, ensure you use parameterized queries to maintain security (NFR-04).
+   - If suggesting MySQL schemas or queries to store profiles, ratings (FR-04), or messages, ensure you use parameterized queries to maintain security (NFR-04).
 
 5. **Language and Documentation:**
    - Always respond in the chat, write code comments, and provide explanations exclusively in English.
