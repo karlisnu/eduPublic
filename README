@@ -204,6 +204,22 @@ The project is currently in the frontend prototype stage. It includes a full vis
 - Windows: double-click the HTML file or open it in the browser.
 - VS Code: use the Live Server extension to run the page quickly.
 
+### Dev Container Execution
+The reproducible development environment uses PostgreSQL with the following connection:
+
+```bash
+psql postgresql://dev:dev@db:5432/appdb -c "select 1;"
+```
+
+To serve the current frontend prototype from the workspace:
+
+```bash
+cd frontend
+npm run dev
+```
+
+The application is then available at `http://localhost:5173`.
+
 ---
 
 ## Recommended Future Improvements
