@@ -220,6 +220,10 @@ npm run dev
 
 The application is then available at `http://localhost:5173`.
 
+The project architecture and planned API boundary are documented in
+[`docs/architecture.md`](docs/architecture.md). Pull requests are validated by
+the workflow in [`.github/workflows/ci.yml`](.github/workflows/ci.yml).
+
 ---
 
 ## Recommended Future Improvements

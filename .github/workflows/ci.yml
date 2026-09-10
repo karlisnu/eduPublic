@@ -1,0 +1,33 @@
+name: Validate Edu-Match
+
+on:
+  pull_request:
+  push:
+    branches: [main, karla-branch]
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Validate frontend package
+        working-directory: frontend
+        run: npm install --ignore-scripts
+
+      - name: Validate setup script
+        run: bash -n .devcontainer/setup.sh
+
+      - name: Validate required project files
+        run: |
+          test -f .devcontainer/devcontainer.json
+          test -f .devcontainer/docker-compose.yml
+          test -f .github/pull_request_template.md
+          test -f docs/pair-log.md
+          test -f docs/architecture.md
