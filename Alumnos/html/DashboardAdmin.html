@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Panel Admin - EduMatch</title>
+    <link rel="stylesheet" href="Inicio.css">
+</head>
+<body>
+    <main class="login-container">
+        <section class="login-form-section">
+            <div class="form-content">
+                <div class="main-group">
+                    <h1>Panel de<br>administración</h1>
+                    <p>Sesión iniciada como <strong>admin</strong>.</p>
+                    <button type="button" class="btn-main-login" onclick="sessionStorage.removeItem('edumatchUser'); window.location.href='Login.html'">CERRAR SESIÓN</button>
+                </div>
+            </div>
+        </section>
+    </main>
+</body>
+</html>

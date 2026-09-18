@@ -27,7 +27,7 @@
                     <div class="role-selection">
                         
                         <button type="button" class="role-btn active" id="btn-estudiante">Estudiante</button>
-                        <button type="button" class="role-btn tutor" id="btn-tutor">Tutor</button>
+                        <button type="button" class="role-btn" id="btn-admin">Admin</button>
                     </div>
 
                    
@@ -68,15 +68,9 @@
         document.addEventListener('DOMContentLoaded', () => {
             const buttons = document.querySelectorAll('.role-btn');
             const loginForm = document.getElementById('loginForm');
-            const btnTutor = document.getElementById('btn-tutor');
+            const btnAdmin = document.getElementById('btn-admin');
             const userInput = document.getElementById('username');
             const passInput = document.getElementById('password');
-
-           
-            const credenciales = {
-                estudiante: { user: "alumno", pass: "alumno123" },
-                tutor: { user: "profe", pass: "profe123" }
-            };
 
             
             buttons.forEach(button => {
@@ -87,25 +81,34 @@
             });
 
             
-            loginForm.addEventListener('submit', (event) => {
+            loginForm.addEventListener('submit', async (event) => {
                 event.preventDefault();
 
-                const usuario = userInput.value;
-                const contrasena = passInput.value;
-                const esTutorSeleccionado = btnTutor.classList.contains('active');
+                const apiBase = window.location.protocol === "file:" || window.location.port !== "8000"
+                    ? "http://localhost:8000"
+                    : "";
+                const endpoint = `${apiBase}/api/login`;
 
-                if (esTutorSeleccionado) {
-                    if (usuario === credenciales.tutor.user && contrasena === credenciales.tutor.pass) {
-                        window.location.href = "DashboardTutor.html";
-                    } else {
-                        alert("Error: Usuario o contraseña de Tutor incorrectos.");
+                try {
+                    const response = await fetch(endpoint, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ username: userInput.value, password: passInput.value })
+                    });
+                    const user = await response.json();
+                    if (!response.ok) throw new Error(user.error || "No se pudo iniciar sesión");
+
+                    if (btnAdmin.classList.contains('active') && user.role !== "admin") {
+                        throw new Error("Selecciona el acceso que corresponde a tu usuario");
                     }
-                } else {
-                    if (usuario === credenciales.estudiante.user && contrasena === credenciales.estudiante.pass) {
-                        window.location.href = "DashboardAlumnos.html";
-                    } else {
-                        alert("Error: Usuario o contraseña de Estudiante incorrectos.");
+                    if (!btnAdmin.classList.contains('active') && user.role !== "alumno") {
+                        throw new Error("Selecciona el acceso que corresponde a tu usuario");
                     }
+
+                    sessionStorage.setItem("edumatchUser", JSON.stringify(user));
+                    window.location.href = user.role === "admin" ? "DashboardAdmin.html" : "DashboardAlumnos.html";
+                } catch (error) {
+                    alert(error.message);
                 }
             });
         });
