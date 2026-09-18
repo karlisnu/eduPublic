@@ -3,7 +3,7 @@ const cors = require("cors");
 const crypto = require("crypto");
 const path = require("path");
 require("dotenv").config();
-const pool = require("./db");
+const { pool, isDbAvailable } = require("./db");
 
 const app = express();
 
@@ -12,20 +12,37 @@ app.use(express.json());
 app.use("/Alumnos/html", express.static(path.join(__dirname, "../../Alumnos/html")));
 app.use("/imagenes", express.static(path.join(__dirname, "../../imagenes")));
 
-const hashPassword = (password, salt = crypto.randomBytes(16).toString("hex")) => {
+const fallbackUsers = [
+  { id: 1, username: "admin", password_hash: hashPassword("admin123"), role: "admin" },
+  { id: 2, username: "alumno", password_hash: hashPassword("alumno123"), role: "alumno" },
+];
+
+const fallbackTutors = [
+  { id: 1, name: "Ana García", subject: "Matemáticas", experience: "5 años", availability: "Lun-Vie", rating: 4.9, bio: "Especialista en álgebra y cálculo.", is_available: true },
+  { id: 2, name: "Luis Ramírez", subject: "Física", experience: "4 años", availability: "Mar-Jue", rating: 4.8, bio: "Apoya con ejercicios y teoría.", is_available: true },
+  { id: 3, name: "Marina López", subject: "Programación", experience: "6 años", availability: "Mie-Sab", rating: 5.0, bio: "Clases prácticas de JavaScript y lógica.", is_available: true },
+];
+
+function hashPassword(password, salt = crypto.randomBytes(16).toString("hex")) {
   const hash = crypto.scryptSync(password, salt, 64).toString("hex");
   return `${salt}:${hash}`;
-};
+}
 
-const verifyPassword = (password, storedHash) => {
+function verifyPassword(password, storedHash) {
   const [salt, hash] = storedHash.split(":");
   if (!salt || !hash) return false;
 
   const calculatedHash = crypto.scryptSync(password, salt, 64).toString("hex");
   return crypto.timingSafeEqual(Buffer.from(hash, "hex"), Buffer.from(calculatedHash, "hex"));
-};
+}
 
 const ensureUsersTable = async () => {
+  const dbReady = await isDbAvailable();
+  if (!dbReady) {
+    console.warn("MySQL no disponible. Usando almacenamiento en memoria para usuarios y tutores.");
+    return;
+  }
+
   await pool.query(`
     CREATE TABLE IF NOT EXISTS users (
       id INT UNSIGNED NOT NULL AUTO_INCREMENT,
@@ -56,6 +73,7 @@ app.get("/", (req, res) => {
     message: "API EDU-EduMatch funcionando",
     login: "http://localhost:8000/Alumnos/html/Login.html",
     endpoints: ["GET /api/health", "POST /api/login", "POST /api/users", "GET /api/tutors"],
+    database: "fallback-memory",
   });
 });
 
@@ -72,6 +90,17 @@ app.post("/api/login", async (req, res, next) => {
   }
 
   try {
+    const dbReady = await isDbAvailable();
+
+    if (!dbReady) {
+      const user = fallbackUsers.find((item) => item.username === username);
+      if (!user || !verifyPassword(password, user.password_hash)) {
+        return res.status(401).json({ error: "Usuario o contraseña incorrectos" });
+      }
+
+      return res.json({ id: user.id, username: user.username, role: user.role });
+    }
+
     const [rows] = await pool.query(
       "SELECT id, username, password_hash, role FROM users WHERE username = ? LIMIT 1",
       [username],
@@ -97,6 +126,24 @@ app.post("/api/users", async (req, res, next) => {
   }
 
   try {
+    const dbReady = await isDbAvailable();
+
+    if (!dbReady) {
+      const existingUser = fallbackUsers.find((user) => user.username === username);
+      if (existingUser) {
+        return res.status(409).json({ error: "El usuario ya existe" });
+      }
+
+      const newUser = {
+        id: fallbackUsers.length + 1,
+        username,
+        password_hash: hashPassword(password),
+        role,
+      };
+      fallbackUsers.push(newUser);
+      return res.status(201).json({ id: newUser.id, username, role });
+    }
+
     const [result] = await pool.query(
       "INSERT INTO users (username, password_hash, role) VALUES (?, ?, ?)",
       [username, hashPassword(password), role],
@@ -112,7 +159,16 @@ app.post("/api/users", async (req, res, next) => {
 
 app.get("/api/tutors", async (req, res, next) => {
   try {
+    const dbReady = await isDbAvailable();
     const subject = typeof req.query.subject === "string" ? req.query.subject.trim() : "";
+
+    if (!dbReady) {
+      const filtered = subject
+        ? fallbackTutors.filter((tutor) => tutor.subject.toLowerCase().includes(subject.toLowerCase()))
+        : fallbackTutors;
+      return res.json(filtered);
+    }
+
     const query = subject
       ? `SELECT id, name, subject, experience, availability, rating, bio, is_available
          FROM tutors WHERE is_available = 1 AND subject LIKE ? ORDER BY rating DESC, name ASC`
@@ -133,6 +189,16 @@ app.get("/api/tutors/:id", async (req, res, next) => {
   }
 
   try {
+    const dbReady = await isDbAvailable();
+
+    if (!dbReady) {
+      const tutor = fallbackTutors.find((item) => item.id === id && item.is_available);
+      if (!tutor) {
+        return res.status(404).json({ error: "Tutor no encontrado" });
+      }
+      return res.json(tutor);
+    }
+
     const [rows] = await pool.query(
       `SELECT id, name, subject, experience, availability, rating, bio, is_available
        FROM tutors WHERE id = ? AND is_available = 1`,

@@ -7,7 +7,18 @@ const pool = mysql.createPool({
   database: process.env.DB_NAME || "appdb",
   port: Number(process.env.DB_PORT || 3306),
   waitForConnections: true,
-  connectionLimit: 10
+  connectionLimit: 10,
+  connectTimeout: 2000,
+  timeout: 2000,
 });
 
-module.exports = pool;
+const isDbAvailable = async () => {
+  try {
+    await pool.query("SELECT 1");
+    return true;
+  } catch (error) {
+    return false;
+  }
+};
+
+module.exports = { pool, isDbAvailable };
