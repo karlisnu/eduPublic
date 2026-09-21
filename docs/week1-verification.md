@@ -15,10 +15,11 @@ mysql -h db -u dev -pdev appdb -e "SELECT 1;"
 
 The expected runtime is Node 22.x. Python is optional for the current Node.js path. The database command must return one row containing `1`.
 
-The frontend can be started with:
+The React frontend uses React 19, React DOM, JSX, Vite, and CSS. It can be started with:
 
 ```bash
 cd frontend
+npm install
 npm run dev
 ```
 

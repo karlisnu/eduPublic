@@ -13,9 +13,6 @@ npm --version
 for attempt in {1..60}; do
   if mysqladmin ping -h db -u dev -pdev --silent >/dev/null 2>&1; then
     mysql -h db -u dev -pdev appdb -e "SELECT 1;" >/dev/null
-    if [[ -f backend/sql/schema.sql ]]; then
-      mysql -h db -u dev -pdev appdb < backend/sql/schema.sql
-    fi
     echo "Development environment ready."
     exit 0
   fi

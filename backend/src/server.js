@@ -13,8 +13,8 @@ app.use("/Alumnos/html", express.static(path.join(__dirname, "../../Alumnos/html
 app.use("/imagenes", express.static(path.join(__dirname, "../../imagenes")));
 
 const fallbackUsers = [
-  { id: 1, username: "admin", password_hash: hashPassword("admin123"), role: "admin" },
-  { id: 2, username: "alumno", password_hash: hashPassword("alumno123"), role: "alumno" },
+  { id: 1, username: "admin", password_hash: hashPassword("admin123"), role: "admin", account_status: "approved" },
+  { id: 2, username: "alumno", password_hash: hashPassword("alumno123"), role: "alumno", account_status: "approved" },
 ];
 
 const fallbackTutors = [
@@ -22,6 +22,8 @@ const fallbackTutors = [
   { id: 2, name: "Luis Ramírez", subject: "Física", experience: "4 años", availability: "Mar-Jue", rating: 4.8, bio: "Apoya con ejercicios y teoría.", is_available: true },
   { id: 3, name: "Marina López", subject: "Programación", experience: "6 años", availability: "Mie-Sab", rating: 5.0, bio: "Clases prácticas de JavaScript y lógica.", is_available: true },
 ];
+
+let usersSupportsApproval = false;
 
 function hashPassword(password, salt = crypto.randomBytes(16).toString("hex")) {
   const hash = crypto.scryptSync(password, salt, 64).toString("hex");
@@ -47,24 +49,41 @@ const ensureUsersTable = async () => {
     CREATE TABLE IF NOT EXISTS users (
       id INT UNSIGNED NOT NULL AUTO_INCREMENT,
       username VARCHAR(80) NOT NULL,
+      email VARCHAR(255) NOT NULL,
       password_hash VARCHAR(255) NOT NULL,
-      role ENUM('admin', 'alumno') NOT NULL DEFAULT 'alumno',
+      role ENUM('admin', 'alumno', 'tutor') NOT NULL DEFAULT 'alumno',
+      account_status ENUM('pending', 'approved', 'rejected', 'suspended') NOT NULL DEFAULT 'pending',
+      approved_at DATETIME NULL,
       created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
       PRIMARY KEY (id),
-      UNIQUE KEY uq_users_username (username)
+      UNIQUE KEY uq_users_username (username),
+      UNIQUE KEY uq_users_email (email)
     )
   `);
 
+  const [userColumns] = await pool.query("SHOW COLUMNS FROM users");
+  usersSupportsApproval = userColumns.some((column) => column.Field === "account_status");
+
   const defaultUsers = [
-    ["admin", "admin123", "admin"],
-    ["alumno", "alumno123", "alumno"],
+    ["admin", "admin@example.com", "admin123", "admin"],
+    ["alumno", "alumno@example.com", "alumno123", "alumno"],
   ];
 
-  for (const [username, password, role] of defaultUsers) {
-    await pool.query(
-      "INSERT IGNORE INTO users (username, password_hash, role) VALUES (?, ?, ?)",
-      [username, hashPassword(password), role],
-    );
+  for (const [username, email, password, role] of defaultUsers) {
+    if (usersSupportsApproval) {
+      await pool.query(
+        `INSERT IGNORE INTO users
+         (username, email, password_hash, role, account_status, approved_at)
+         VALUES (?, ?, ?, ?, 'approved', CURRENT_TIMESTAMP)`,
+        [username, email, hashPassword(password), role],
+      );
+    } else {
+      await pool.query(
+        "INSERT IGNORE INTO users (username, password_hash, role) VALUES (?, ?, ?)",
+        [username, hashPassword(password), role],
+      );
+    }
   }
 };
 
@@ -93,8 +112,8 @@ app.post("/api/login", async (req, res, next) => {
     const dbReady = await isDbAvailable();
 
     if (!dbReady) {
-      const user = fallbackUsers.find((item) => item.username === username);
-      if (!user || !verifyPassword(password, user.password_hash)) {
+        const user = fallbackUsers.find((item) => item.username === username);
+        if (!user || user.account_status !== "approved" || !verifyPassword(password, user.password_hash)) {
         return res.status(401).json({ error: "Usuario o contraseña incorrectos" });
       }
 
@@ -102,11 +121,17 @@ app.post("/api/login", async (req, res, next) => {
     }
 
     const [rows] = await pool.query(
-      "SELECT id, username, password_hash, role FROM users WHERE username = ? LIMIT 1",
+      `SELECT id, username, password_hash, role
+       ${usersSupportsApproval ? ", account_status" : ""}
+       FROM users WHERE username = ? LIMIT 1`,
       [username],
     );
 
-    if (rows.length === 0 || !verifyPassword(password, rows[0].password_hash)) {
+    if (
+      rows.length === 0 ||
+      (usersSupportsApproval && rows[0].account_status !== "approved") ||
+      !verifyPassword(password, rows[0].password_hash)
+    ) {
       return res.status(401).json({ error: "Usuario o contraseña incorrectos" });
     }
 
@@ -119,10 +144,11 @@ app.post("/api/login", async (req, res, next) => {
 app.post("/api/users", async (req, res, next) => {
   const username = typeof req.body.username === "string" ? req.body.username.trim() : "";
   const password = typeof req.body.password === "string" ? req.body.password : "";
-  const role = req.body.role === "admin" ? "admin" : "alumno";
+  const role = req.body.role === "tutor" ? "tutor" : "alumno";
+  const email = typeof req.body.email === "string" ? req.body.email.trim() : "";
 
-  if (username.length < 3 || password.length < 6) {
-    return res.status(400).json({ error: "El usuario debe tener 3 caracteres y la contraseña 6" });
+  if (username.length < 3 || password.length < 6 || !email.includes("@")) {
+  return res.status(400).json({ error: "Usuario, correo y contraseña tienen un formato inválido" });
   }
 
   try {
@@ -139,15 +165,21 @@ app.post("/api/users", async (req, res, next) => {
         username,
         password_hash: hashPassword(password),
         role,
+        account_status: "pending",
       };
       fallbackUsers.push(newUser);
       return res.status(201).json({ id: newUser.id, username, role });
     }
 
-    const [result] = await pool.query(
-      "INSERT INTO users (username, password_hash, role) VALUES (?, ?, ?)",
-      [username, hashPassword(password), role],
-    );
+    const [result] = usersSupportsApproval
+      ? await pool.query(
+          "INSERT INTO users (username, email, password_hash, role) VALUES (?, ?, ?, ?)",
+          [username, email, hashPassword(password), role],
+        )
+      : await pool.query(
+          "INSERT INTO users (username, password_hash, role) VALUES (?, ?, ?)",
+          [username, hashPassword(password), role],
+        );
     res.status(201).json({ id: result.insertId, username, role });
   } catch (error) {
     if (error.code === "ER_DUP_ENTRY") {
@@ -169,11 +201,28 @@ app.get("/api/tutors", async (req, res, next) => {
       return res.json(filtered);
     }
 
-    const query = subject
-      ? `SELECT id, name, subject, experience, availability, rating, bio, is_available
-         FROM tutors WHERE is_available = 1 AND subject LIKE ? ORDER BY rating DESC, name ASC`
-      : `SELECT id, name, subject, experience, availability, rating, bio, is_available
-         FROM tutors WHERE is_available = 1 ORDER BY rating DESC, name ASC`;
+    const query = `
+      SELECT
+        tp.user_id AS id,
+        CONCAT(tp.first_name, ' ', tp.last_name) AS name,
+        GROUP_CONCAT(DISTINCT s.name ORDER BY s.name SEPARATOR ', ') AS subject,
+        tp.experience,
+        tp.availability,
+        COALESCE(ROUND(AVG(tr.rating), 1), 0) AS rating,
+        tp.bio,
+        tp.is_available
+      FROM tutor_profiles tp
+      INNER JOIN users u ON u.id = tp.user_id
+      INNER JOIN tutor_subjects ts ON ts.tutor_id = tp.user_id
+      INNER JOIN subjects s ON s.id = ts.subject_id
+      LEFT JOIN tutor_ratings tr ON tr.tutor_id = tp.user_id
+      WHERE tp.is_available = 1
+        AND tp.application_status = 'approved'
+        AND u.account_status = 'approved'
+        ${subject ? "AND s.name LIKE ?" : ""}
+      GROUP BY tp.user_id, tp.first_name, tp.last_name, tp.experience,
+        tp.availability, tp.bio, tp.is_available
+      ORDER BY rating DESC, name ASC`;
     const [rows] = await pool.query(query, subject ? [`%${subject}%`] : []);
     res.json(rows);
   } catch (error) {
@@ -200,8 +249,26 @@ app.get("/api/tutors/:id", async (req, res, next) => {
     }
 
     const [rows] = await pool.query(
-      `SELECT id, name, subject, experience, availability, rating, bio, is_available
-       FROM tutors WHERE id = ? AND is_available = 1`,
+      `SELECT
+         tp.user_id AS id,
+         CONCAT(tp.first_name, ' ', tp.last_name) AS name,
+         GROUP_CONCAT(DISTINCT s.name ORDER BY s.name SEPARATOR ', ') AS subject,
+         tp.experience,
+         tp.availability,
+         COALESCE(ROUND(AVG(tr.rating), 1), 0) AS rating,
+         tp.bio,
+         tp.is_available
+       FROM tutor_profiles tp
+       INNER JOIN users u ON u.id = tp.user_id
+       INNER JOIN tutor_subjects ts ON ts.tutor_id = tp.user_id
+       INNER JOIN subjects s ON s.id = ts.subject_id
+       LEFT JOIN tutor_ratings tr ON tr.tutor_id = tp.user_id
+       WHERE tp.user_id = ?
+         AND tp.is_available = 1
+         AND tp.application_status = 'approved'
+         AND u.account_status = 'approved'
+       GROUP BY tp.user_id, tp.first_name, tp.last_name, tp.experience,
+         tp.availability, tp.bio, tp.is_available`,
       [id],
     );
 

@@ -4,6 +4,8 @@
 **Tu framework:** React, Vue o Angular; los **conceptos son idénticos**, solo cambia la sintaxis. Esta hoja muestra primero la idea y después las tres sintaxis.
 **Reglas:** trabajen dentro del **dev container**, en una **rama** (`git switch -c feat/m1-frontend`) y hagan un commit después de cada bloque que funcione.
 
+> **Aplicación en EDU-EduMatch:** el frontend activo del proyecto usa **React 19**, **React DOM**, **JSX**, **Vite** y **CSS**. Los ejemplos de Vue y Angular de esta hoja sirven únicamente para comparar conceptos; no forman parte de las dependencias actuales.
+
 > **La frase que hay que recordar durante toda la clase:**
 > _Un componente convierte los **datos** en **marcado**, y el framework lo **vuelve a ejecutar** automáticamente cada vez que cambian sus datos._
 
