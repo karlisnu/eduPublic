@@ -44,6 +44,48 @@ async function upgradeLegacyUsers(connection) {
   }
 }
 
+async function validateProfileRulesMigration(connection) {
+  const [rows] = await connection.query(`
+    SELECT
+      (SELECT COUNT(*) FROM users
+       WHERE NOT REGEXP_LIKE(username, '^[[:alpha:]]+$')
+          OR NOT REGEXP_LIKE(email, '^[^[:space:]@]+@[^[:space:]@]+[.][^[:space:]@]+$'))
+        AS invalid_users,
+      (SELECT COUNT(*) FROM student_profiles
+       WHERE NOT REGEXP_LIKE(first_name, '^[[:alpha:]]+$')
+          OR NOT REGEXP_LIKE(last_name, '^[[:alpha:]]+$')
+          OR NOT REGEXP_LIKE(student_number, '^[0-9]{11}$')
+          OR phone IS NULL
+          OR NOT REGEXP_LIKE(phone, '^[0-9]{11}$'))
+        AS invalid_student_profiles,
+      (SELECT COUNT(*) FROM tutor_profiles
+       WHERE NOT REGEXP_LIKE(first_name, '^[[:alpha:]]+$')
+          OR NOT REGEXP_LIKE(last_name, '^[[:alpha:]]+$')
+          OR CHAR_LENGTH(bio) > 100
+          OR CHAR_LENGTH(experience) > 100)
+        AS invalid_tutor_profiles,
+      (SELECT COUNT(*) FROM subjects
+       WHERE description IS NOT NULL
+         AND CHAR_LENGTH(TRIM(description)) > 0
+         AND CHAR_LENGTH(REGEXP_REPLACE(TRIM(description), '[[:space:]]+', ' '))
+             - CHAR_LENGTH(REPLACE(REGEXP_REPLACE(TRIM(description), '[[:space:]]+', ' '), ' ', '')) >= 100)
+        AS invalid_subject_descriptions,
+      (SELECT COUNT(*) FROM tutor_ratings WHERE CHAR_LENGTH(review) > 50)
+        AS invalid_tutor_reviews,
+      (SELECT COUNT(*) FROM student_evaluations WHERE CHAR_LENGTH(comments) > 50)
+        AS invalid_student_evaluation_comments
+  `);
+  const invalidCounts = Object.entries(rows[0]).filter(([, count]) => Number(count) > 0);
+
+  if (invalidCounts.length > 0) {
+    const details = invalidCounts.map(([field, count]) => `${field}: ${count}`).join(", ");
+    throw new Error(
+      `Cannot apply profile data rules while legacy rows violate them (${details}). ` +
+      "Review and correct legacy data without inventing verified student numbers, then rerun the migration.",
+    );
+  }
+}
+
 async function migrate() {
   const connection = await pool.getConnection();
   try {
@@ -64,6 +106,9 @@ async function migrate() {
 
     for (const file of files) {
       if (applied.has(file)) continue;
+      if (file === "002_apply_profile_data_rules.sql") {
+        await validateProfileRulesMigration(connection);
+      }
       const sql = await fs.readFile(path.join(migrationsDirectory, file), "utf8");
       for (const statement of splitStatements(sql)) {
         await connection.query(statement);

@@ -121,3 +121,45 @@ security mechanisms.
      rules (for example, `searchTutorBySubject()` and
      `validateStudentRegistration()`).
    - Keep comments, documentation, and code explanations in English.
+
+7. **Database tables and field validation**
+   - Apply validation in the UI and repeat it in the backend. Enforce uniqueness and
+     referential rules in MySQL where appropriate; never treat client-side checks as
+     proof that a value is valid.
+   - In `usuarios`, restrict usernames to letters only (including accented letters),
+     validate email format, reject whitespace in email addresses, and keep emails
+     unique. Store passwords only as secure hashes. Keep the role, including the
+     administrator role, on the user account.
+   - Keep the student's enrollment number (`numero_estudiante` / student number) in
+     `perfiles_estudiantes`; require exactly 11 digits and prevent duplicates.
+     Verify that the number actually exists using an authoritative Universidad de
+     Sonora data source or verification process when available. Numeric format and
+     uniqueness alone do not prove enrollment; never invent or simulate this check.
+   - In `perfiles_estudiantes`, allow letters (including accents) only in first and
+     last names. Career and campus must be selected from existing, authoritative
+     database catalog values, enforced with references where supported; do not
+     hard-code a presumed catalog or represent catalog membership with booleans.
+     Require the phone format specified for this project: digits only, exactly 11
+     digits total, including the telephone/area prefix.
+   - In `perfiles_tutores`, allow letters (including accents) only in first and last
+     names; limit bio and experience to 100 characters each. Remove the textual
+     `availability` field as requested, but preserve `esta_disponible` if it is used
+     as the tutor's availability control.
+   - In `materias`, preserve existing subject names; do not rename or rewrite them.
+     Limit each subject description to 100 words.
+   - In `calificaciones_tutores`, limit the review/comment string to 50 characters.
+     Remove the `created_IUpdate` function or automatic created/updated behavior if
+     present; do not add a replacement without an explicit requirement.
+   - In `evaluaciones_estudiantes`, limit `comentarios` to 50 characters. In
+     `archivos_academicos`, remove `main_type` if present while retaining any
+     separate MIME-type validation needed for safe file handling.
+   - Administrators must be represented by a `usuarios` account with the
+     administrator role and use the existing authentication system. If an
+     `administradores` table is required, link it one-to-one to `usuarios` and do not
+     duplicate passwords or authentication data. Do not provide public administrator
+     registration; provision the initial administrator through a controlled process
+     outside the public application.
+   - Only authenticated administrators may modify student or tutor records, enforced
+     on the backend. Link approval actions in `eventos_aprobacion` to the affected
+     user and to the reviewing administrator (`id_revisor`); retain an auditable
+     record of approval decisions.

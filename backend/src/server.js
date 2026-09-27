@@ -13,17 +13,14 @@ app.use("/Alumnos/html", express.static(path.join(__dirname, "../../Alumnos/html
 app.use("/imagenes", express.static(path.join(__dirname, "../../imagenes")));
 
 const fallbackUsers = [
-  { id: 1, username: "admin", password_hash: hashPassword("admin123"), role: "admin", account_status: "approved" },
-  { id: 2, username: "alumno", password_hash: hashPassword("alumno123"), role: "alumno", account_status: "approved" },
+  { id: 1, username: "alumno", password_hash: hashPassword("alumno123"), role: "alumno", account_status: "approved" },
 ];
 
 const fallbackTutors = [
-  { id: 1, name: "Ana García", subject: "Matemáticas", experience: "5 años", availability: "Lun-Vie", rating: 4.9, bio: "Especialista en álgebra y cálculo.", is_available: true },
-  { id: 2, name: "Luis Ramírez", subject: "Física", experience: "4 años", availability: "Mar-Jue", rating: 4.8, bio: "Apoya con ejercicios y teoría.", is_available: true },
-  { id: 3, name: "Marina López", subject: "Programación", experience: "6 años", availability: "Mie-Sab", rating: 5.0, bio: "Clases prácticas de JavaScript y lógica.", is_available: true },
+  { id: 1, name: "Ana García", subject: "Matemáticas", experience: "5 años", rating: 4.9, bio: "Especialista en álgebra y cálculo.", is_available: true },
+  { id: 2, name: "Luis Ramírez", subject: "Física", experience: "4 años", rating: 4.8, bio: "Apoya con ejercicios y teoría.", is_available: true },
+  { id: 3, name: "Marina López", subject: "Programación", experience: "6 años", rating: 5.0, bio: "Clases prácticas de JavaScript y lógica.", is_available: true },
 ];
-
-let usersSupportsApproval = false;
 
 function hashPassword(password, salt = crypto.randomBytes(16).toString("hex")) {
   const hash = crypto.scryptSync(password, salt, 64).toString("hex");
@@ -38,52 +35,20 @@ function verifyPassword(password, storedHash) {
   return crypto.timingSafeEqual(Buffer.from(hash, "hex"), Buffer.from(calculatedHash, "hex"));
 }
 
-const ensureUsersTable = async () => {
+const prepareDatabase = async () => {
   const dbReady = await isDbAvailable();
   if (!dbReady) {
     console.warn("MySQL no disponible. Usando almacenamiento en memoria para usuarios y tutores.");
     return;
   }
 
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS users (
-      id INT UNSIGNED NOT NULL AUTO_INCREMENT,
-      username VARCHAR(80) NOT NULL,
-      email VARCHAR(255) NOT NULL,
-      password_hash VARCHAR(255) NOT NULL,
-      role ENUM('admin', 'alumno', 'tutor') NOT NULL DEFAULT 'alumno',
-      account_status ENUM('pending', 'approved', 'rejected', 'suspended') NOT NULL DEFAULT 'pending',
-      approved_at DATETIME NULL,
-      created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-      updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-      PRIMARY KEY (id),
-      UNIQUE KEY uq_users_username (username),
-      UNIQUE KEY uq_users_email (email)
-    )
-  `);
-
   const [userColumns] = await pool.query("SHOW COLUMNS FROM users");
-  usersSupportsApproval = userColumns.some((column) => column.Field === "account_status");
+  const requiredColumns = ["email", "account_status", "approved_at"];
+  const availableColumns = new Set(userColumns.map((column) => column.Field));
+  const missingColumns = requiredColumns.filter((column) => !availableColumns.has(column));
 
-  const defaultUsers = [
-    ["admin", "admin@example.com", "admin123", "admin"],
-    ["alumno", "alumno@example.com", "alumno123", "alumno"],
-  ];
-
-  for (const [username, email, password, role] of defaultUsers) {
-    if (usersSupportsApproval) {
-      await pool.query(
-        `INSERT IGNORE INTO users
-         (username, email, password_hash, role, account_status, approved_at)
-         VALUES (?, ?, ?, ?, 'approved', CURRENT_TIMESTAMP)`,
-        [username, email, hashPassword(password), role],
-      );
-    } else {
-      await pool.query(
-        "INSERT IGNORE INTO users (username, password_hash, role) VALUES (?, ?, ?)",
-        [username, hashPassword(password), role],
-      );
-    }
+  if (missingColumns.length > 0) {
+    throw new Error(`Database schema is missing required users columns: ${missingColumns.join(", ")}`);
   }
 };
 
@@ -121,15 +86,14 @@ app.post("/api/login", async (req, res, next) => {
     }
 
     const [rows] = await pool.query(
-      `SELECT id, username, password_hash, role
-       ${usersSupportsApproval ? ", account_status" : ""}
+      `SELECT id, username, password_hash, role, account_status
        FROM users WHERE username = ? LIMIT 1`,
       [username],
     );
 
     if (
       rows.length === 0 ||
-      (usersSupportsApproval && rows[0].account_status !== "approved") ||
+      rows[0].account_status !== "approved" ||
       !verifyPassword(password, rows[0].password_hash)
     ) {
       return res.status(401).json({ error: "Usuario o contraseña incorrectos" });
@@ -146,9 +110,11 @@ app.post("/api/users", async (req, res, next) => {
   const password = typeof req.body.password === "string" ? req.body.password : "";
   const role = req.body.role === "tutor" ? "tutor" : "alumno";
   const email = typeof req.body.email === "string" ? req.body.email.trim() : "";
+  const usernameContainsOnlyLetters = /^\p{L}+$/u.test(username);
+  const emailHasValidFormat = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 
-  if (username.length < 3 || password.length < 6 || !email.includes("@")) {
-  return res.status(400).json({ error: "Usuario, correo y contraseña tienen un formato inválido" });
+  if (username.length < 3 || !usernameContainsOnlyLetters || password.length < 6 || !emailHasValidFormat) {
+    return res.status(400).json({ error: "Usuario, correo y contraseña tienen un formato inválido" });
   }
 
   try {
@@ -171,15 +137,10 @@ app.post("/api/users", async (req, res, next) => {
       return res.status(201).json({ id: newUser.id, username, role });
     }
 
-    const [result] = usersSupportsApproval
-      ? await pool.query(
-          "INSERT INTO users (username, email, password_hash, role) VALUES (?, ?, ?, ?)",
-          [username, email, hashPassword(password), role],
-        )
-      : await pool.query(
-          "INSERT INTO users (username, password_hash, role) VALUES (?, ?, ?)",
-          [username, hashPassword(password), role],
-        );
+    const [result] = await pool.query(
+      "INSERT INTO users (username, email, password_hash, role) VALUES (?, ?, ?, ?)",
+      [username, email, hashPassword(password), role],
+    );
     res.status(201).json({ id: result.insertId, username, role });
   } catch (error) {
     if (error.code === "ER_DUP_ENTRY") {
@@ -207,7 +168,6 @@ app.get("/api/tutors", async (req, res, next) => {
         CONCAT(tp.first_name, ' ', tp.last_name) AS name,
         GROUP_CONCAT(DISTINCT s.name ORDER BY s.name SEPARATOR ', ') AS subject,
         tp.experience,
-        tp.availability,
         COALESCE(ROUND(AVG(tr.rating), 1), 0) AS rating,
         tp.bio,
         tp.is_available
@@ -221,7 +181,7 @@ app.get("/api/tutors", async (req, res, next) => {
         AND u.account_status = 'approved'
         ${subject ? "AND s.name LIKE ?" : ""}
       GROUP BY tp.user_id, tp.first_name, tp.last_name, tp.experience,
-        tp.availability, tp.bio, tp.is_available
+        tp.bio, tp.is_available
       ORDER BY rating DESC, name ASC`;
     const [rows] = await pool.query(query, subject ? [`%${subject}%`] : []);
     res.json(rows);
@@ -254,7 +214,6 @@ app.get("/api/tutors/:id", async (req, res, next) => {
          CONCAT(tp.first_name, ' ', tp.last_name) AS name,
          GROUP_CONCAT(DISTINCT s.name ORDER BY s.name SEPARATOR ', ') AS subject,
          tp.experience,
-         tp.availability,
          COALESCE(ROUND(AVG(tr.rating), 1), 0) AS rating,
          tp.bio,
          tp.is_available
@@ -268,7 +227,7 @@ app.get("/api/tutors/:id", async (req, res, next) => {
          AND tp.application_status = 'approved'
          AND u.account_status = 'approved'
        GROUP BY tp.user_id, tp.first_name, tp.last_name, tp.experience,
-         tp.availability, tp.bio, tp.is_available`,
+         tp.bio, tp.is_available`,
       [id],
     );
 
@@ -289,7 +248,7 @@ app.use((error, req, res, next) => {
 
 const PORT = process.env.PORT || 8000;
 
-ensureUsersTable()
+prepareDatabase()
   .then(() => {
     app.listen(PORT, () => {
       console.log(`Backend ejecutándose en http://localhost:${PORT}`);

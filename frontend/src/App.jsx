@@ -219,7 +219,7 @@ function App() {
                 <p>{tutor.bio || tutor.experience}</p>
                 <div className="card-footer">
                   <span>★ {tutor.rating}</span>
-                  <span>{tutor.availability}</span>
+                  <span>{tutor.is_available ? "Disponible" : "No disponible"}</span>
                 </div>
               </div>
             </article>
