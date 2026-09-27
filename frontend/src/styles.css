@@ -1,4 +1,34 @@
-@import url('https://fonts.googleapis.com/css2?family=Comfortaa:wght@400;600;700&family=Montserrat:wght@500;600;700&display=swap');
+@font-face {
+  font-family: "Afacad";
+  src: url("../../Fuentes/Afacad,Comfortaa,Josefin_Sans,Livvic,Montserrat/Afacad/Afacad-VariableFont_wght.ttf") format("truetype");
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Livvic";
+  src: url("../../Fuentes/Afacad,Comfortaa,Josefin_Sans,Livvic,Montserrat/Livvic/Livvic-Bold.ttf") format("truetype");
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Comfortaa";
+  src: url("../../Fuentes/Afacad,Comfortaa,Josefin_Sans,Livvic,Montserrat/Comfortaa/Comfortaa-VariableFont_wght.ttf") format("truetype");
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Montserrat";
+  src: url("../../Fuentes/Afacad,Comfortaa,Josefin_Sans,Livvic,Montserrat/Montserrat/Montserrat-VariableFont_wght.ttf") format("truetype");
+  font-style: normal;
+  font-weight: 400 800;
+  font-display: swap;
+}
 
 :root {
   color: #263238;
@@ -218,9 +248,256 @@ h2 { font: 700 2rem 'Comfortaa', sans-serif; margin-bottom: 0; }
 .message { color: #718084; line-height: 1.6; }
 .error { color: #b13d32; }
 
+.welcome-page {
+  --welcome-bordo: #7d1f2d;
+  --welcome-orange: #ff6b00;
+  --welcome-pale-orange: #f2916d;
+  --welcome-surface: #f4f4f4;
+  --welcome-gold: #a88b4a;
+  background: var(--welcome-surface);
+  color: #333;
+  font-family: "Afacad", sans-serif;
+  min-height: 100vh;
+  overflow: hidden;
+}
+.welcome-header {
+  align-items: center;
+  background: #fff;
+  display: flex;
+  gap: 36px;
+  justify-content: space-between;
+  min-height: 72px;
+  padding: 10px max(24px, calc((100% - 1320px) / 2));
+  position: relative;
+  z-index: 1;
+}
+.welcome-logo { display: block; height: 50px; object-fit: contain; width: 118px; }
+.welcome-nav { align-items: center; display: flex; gap: 32px; margin-left: auto; }
+.welcome-nav span {
+  color: #333;
+  font-family: "Montserrat", sans-serif;
+  font-size: .82rem;
+  font-weight: 500;
+}
+.welcome-login-button {
+  background: var(--welcome-orange);
+  border: 0;
+  border-radius: 5px;
+  color: #fff;
+  cursor: pointer;
+  font-family: "Montserrat", sans-serif;
+  font-size: .82rem;
+  font-weight: 700;
+  letter-spacing: .06em;
+  padding: 10px 25px;
+  transition: background .2s ease, transform .2s ease;
+}
+.welcome-login-button:hover { background: #e85e00; transform: scale(1.04); }
+.welcome-login-button:focus-visible, .back-to-welcome:focus-visible {
+  outline: 3px solid var(--welcome-gold);
+  outline-offset: 3px;
+}
+.welcome-main { background: var(--welcome-bordo); }
+.welcome-hero { color: #fff; padding: 36px max(24px, calc((100% - 1320px) / 2)) 0; }
+.welcome-hero-titles {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+  margin: 0 auto 30px;
+  max-width: 1320px;
+}
+.welcome-hero-titles h1 {
+  font: 700 clamp(3.2rem, 7vw, 6.4rem)/.95 "Livvic", sans-serif;
+  letter-spacing: -.055em;
+  margin: 0;
+}
+.welcome-hero-titles h2 {
+  font: 700 clamp(1.5rem, 3.3vw, 3rem)/1.03 "Montserrat", sans-serif;
+  margin: 0;
+  max-width: 480px;
+  text-align: right;
+}
+.welcome-photo {
+  border-radius: 80px;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, .4);
+  margin: 0 auto;
+  max-height: 650px;
+  max-width: 1320px;
+  overflow: hidden;
+}
+.welcome-photo img { display: block; height: clamp(250px, 47vw, 610px); object-fit: cover; width: 100%; }
+.welcome-gradient-divider {
+  background: linear-gradient(to bottom, var(--welcome-bordo), var(--welcome-surface));
+  height: clamp(80px, 12vw, 150px);
+}
+.welcome-tutors-section {
+  background: var(--welcome-surface);
+  display: flex;
+  justify-content: center;
+  padding: 0 24px 65px;
+}
+.welcome-tutor-card {
+  align-items: center;
+  background: #e1e1e1;
+  border-radius: 42px;
+  display: flex;
+  gap: 40px;
+  max-width: 1240px;
+  padding: clamp(28px, 5vw, 58px);
+  width: 100%;
+}
+.welcome-tutor-text { color: #333; flex: 1; }
+.welcome-eyebrow {
+  color: var(--welcome-orange);
+  font-family: "Montserrat", sans-serif;
+  font-size: .74rem;
+  font-weight: 700;
+  letter-spacing: .1em;
+  margin: 0 0 14px;
+  text-transform: uppercase;
+}
+.welcome-tutor-text h2 {
+  color: var(--welcome-bordo);
+  font: 700 clamp(1.8rem, 3.3vw, 2.8rem)/1.1 "Livvic", sans-serif;
+  margin: 0 0 18px;
+}
+.welcome-tutor-text > p:not(.welcome-eyebrow) {
+  font-size: 1.1rem;
+  line-height: 1.6;
+  margin-bottom: 24px;
+}
+.welcome-register-label {
+  background: var(--welcome-pale-orange);
+  border-radius: 12px;
+  color: #fff;
+  display: inline-block;
+  font-family: "Montserrat", sans-serif;
+  font-size: .78rem;
+  font-weight: 700;
+  letter-spacing: .09em;
+  padding: 13px 34px;
+}
+.welcome-tutor-image {
+  border-radius: 25px;
+  flex: 1.2;
+  overflow: hidden;
+}
+.welcome-tutor-image img { display: block; min-height: 290px; object-fit: cover; width: 100%; }
+.welcome-steps-slider {
+  background: var(--welcome-surface);
+  overflow: hidden;
+  padding: 10px 0 80px;
+}
+.welcome-steps-track {
+  animation: welcome-step-cycle 27s infinite;
+  display: flex;
+  width: 300%;
+}
+.welcome-step-card {
+  align-items: center;
+  display: flex;
+  flex: 0 0 33.333333%;
+  gap: clamp(22px, 5vw, 70px);
+  justify-content: center;
+  min-width: 0;
+  padding: 24px max(5vw, calc((100vw - 1240px) / 2));
+}
+.welcome-step-content { color: #333; flex: 1; max-width: 580px; }
+.welcome-step-content h2 {
+  color: var(--welcome-gold);
+  font: 700 clamp(1.8rem, 4vw, 3.2rem)/1.05 "Livvic", sans-serif;
+  margin: 0 0 12px;
+}
+.welcome-step-content h3 {
+  color: var(--welcome-bordo);
+  font: 700 clamp(1.25rem, 2.5vw, 1.9rem)/1.15 "Montserrat", sans-serif;
+  margin: 0 0 10px;
+}
+.welcome-stars { color: #ffcc00; font-size: 1.5rem; letter-spacing: .08em; margin-bottom: 16px; }
+.welcome-stars span { color: #bbb; }
+.welcome-step-content p { font-size: 1rem; line-height: 1.55; margin: 0 0 12px; text-align: justify; }
+.welcome-step-note {
+  color: var(--welcome-bordo);
+  display: inline-block;
+  font-family: "Montserrat", sans-serif;
+  font-size: .66rem;
+  font-weight: 700;
+  letter-spacing: .08em;
+  margin-top: 8px;
+}
+.welcome-step-login {
+  background: var(--welcome-orange);
+  border-radius: 12px;
+  color: #fff;
+  display: inline-block;
+  font-family: "Montserrat", sans-serif;
+  font-size: .82rem;
+  font-weight: 700;
+  margin: 20px 0 0 16px;
+  padding: 10px 28px;
+}
+.welcome-step-login-bordo { background: var(--welcome-bordo); }
+.welcome-step-image {
+  border-radius: 40px;
+  flex: 0 1 500px;
+  height: min(39vw, 500px);
+  min-height: 340px;
+  padding: 18px;
+}
+.welcome-step-image img { border-radius: 20px; height: 100%; object-fit: cover; width: 100%; }
+.welcome-border-orange { border: 10px solid var(--welcome-orange); }
+.welcome-border-bordo { border: 10px solid var(--welcome-bordo); }
+@keyframes welcome-step-cycle {
+  0%, 28% { transform: translateX(0); }
+  33%, 61% { transform: translateX(-33.333333%); }
+  66%, 94% { transform: translateX(-66.666667%); }
+  100% { transform: translateX(0); }
+}
+.welcome-footer {
+  align-items: center;
+  background: var(--welcome-bordo);
+  color: #fff;
+  display: flex;
+  gap: 24px;
+  justify-content: space-between;
+  min-height: 105px;
+  padding: 22px max(24px, calc((100% - 1240px) / 2));
+}
+.welcome-footer-brand { font: 700 1.1rem "Livvic", sans-serif; white-space: nowrap; }
+.welcome-footer-tagline {
+  font-family: "Montserrat", sans-serif;
+  font-size: .72rem;
+  font-weight: 600;
+  letter-spacing: .08em;
+}
+.welcome-social-icons { align-items: center; display: flex; gap: 12px; }
+.welcome-social-icons span {
+  align-items: center;
+  border: 1px solid rgba(255, 255, 255, .5);
+  border-radius: 50%;
+  display: flex;
+  font-family: "Montserrat", sans-serif;
+  font-size: 1rem;
+  height: 34px;
+  justify-content: center;
+  width: 34px;
+}
+.back-to-welcome {
+  background: none;
+  border: 0;
+  color: var(--welcome-bordo);
+  cursor: pointer;
+  font-size: .85rem;
+  font-weight: 700;
+  margin-bottom: 28px;
+  padding: 0;
+}
+
 @media (max-width: 960px) {
   .login-container { grid-template-columns: 1fr; }
   .login-image { min-height: 360px; }
+  .welcome-step-card { padding-left: 5vw; padding-right: 5vw; }
+  .welcome-step-image { min-height: 300px; }
 }
 
 @media (max-width: 600px) {
@@ -233,4 +510,36 @@ h2 { font: 700 2rem 'Comfortaa', sans-serif; margin-bottom: 0; }
   .login-page { padding: 20px; }
   .login-form-section { padding: 24px 20px; }
   .role-selection { flex-direction: column; }
+  .welcome-header { gap: 14px; padding: 10px 20px; }
+  .welcome-logo { height: 44px; width: 90px; }
+  .welcome-nav { display: none; }
+  .welcome-login-button { padding: 11px 16px; }
+  .welcome-hero { padding: 30px 20px 0; }
+  .welcome-hero-titles { align-items: flex-start; flex-direction: column; gap: 16px; margin-bottom: 22px; }
+  .welcome-hero-titles h1 { font-size: clamp(3rem, 14vw, 5rem); }
+  .welcome-hero-titles h2 { font-size: clamp(1.2rem, 6vw, 1.9rem); text-align: left; }
+  .welcome-photo { border-radius: 30px; }
+  .welcome-photo img { height: 64vw; min-height: 230px; }
+  .welcome-gradient-divider { height: 75px; }
+  .welcome-tutors-section { padding: 0 16px 44px; }
+  .welcome-tutor-card { border-radius: 26px; flex-direction: column; gap: 24px; padding: 28px 22px; }
+  .welcome-tutor-text h2 { font-size: 1.8rem; }
+  .welcome-tutor-text > p:not(.welcome-eyebrow) { font-size: 1rem; }
+  .welcome-tutor-image { flex: auto; width: 100%; }
+  .welcome-tutor-image img { min-height: 220px; }
+  .welcome-steps-slider { padding-bottom: 45px; }
+  .welcome-steps-track { animation-duration: 33s; }
+  .welcome-step-card { flex-direction: column; gap: 22px; justify-content: flex-start; padding: 10px 24px; }
+  .welcome-step-content { flex: auto; width: 100%; }
+  .welcome-step-content h2 { font-size: 1.8rem; }
+  .welcome-step-image { flex: auto; height: 74vw; max-height: 370px; min-height: 250px; padding: 10px; width: min(100%, 400px); }
+  .welcome-border-orange, .welcome-border-bordo { border-width: 7px; }
+  .welcome-footer { flex-wrap: wrap; gap: 12px; justify-content: center; padding: 22px 20px; text-align: center; }
+  .welcome-footer-tagline { flex-basis: 100%; order: 1; }
+  .welcome-social-icons { gap: 8px; }
+  .back-to-welcome { margin-bottom: 22px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .welcome-steps-track { animation: none; }
 }

@@ -5,6 +5,9 @@ export default defineConfig({
     jsx: "automatic",
   },
   server: {
+    fs: {
+      allow: [".."],
+    },
     proxy: {
       "/api": "http://localhost:8000",
     },

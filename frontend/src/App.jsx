@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import WelcomePage from "./WelcomePage.jsx";
 
 const API_URL = import.meta.env.VITE_API_URL || "";
 
@@ -11,6 +12,7 @@ function App() {
   const [password, setPassword] = useState("");
   const [selectedRole, setSelectedRole] = useState("alumno");
   const [loginError, setLoginError] = useState("");
+  const [showLogin, setShowLogin] = useState(false);
   const [user, setUser] = useState(() => {
     try {
       const storedUser = sessionStorage.getItem("edumatchUser");
@@ -85,7 +87,12 @@ function App() {
     setPassword("");
     setLoginError("");
     setSelectedRole("alumno");
+    setShowLogin(false);
   };
+
+  if (!user && !showLogin) {
+    return <WelcomePage onLogin={() => setShowLogin(true)} />;
+  }
 
   if (!user) {
     return (
@@ -101,6 +108,16 @@ function App() {
 
           <div className="login-form-section">
             <div className="form-content">
+              <button
+                type="button"
+                className="back-to-welcome"
+                onClick={() => {
+                  setShowLogin(false);
+                  setLoginError("");
+                }}
+              >
+                ← Volver al inicio
+              </button>
               <div className="main-group">
                 <h1>
                   INICIO DE <br /> SESIÓN
