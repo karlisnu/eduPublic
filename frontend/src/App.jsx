@@ -7,7 +7,7 @@ function App() {
   const [tutors, setTutors] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [username, setUsername] = useState("");
+  const [loginIdentifier, setLoginIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [selectedRole, setSelectedRole] = useState("alumno");
   const [loginError, setLoginError] = useState("");
@@ -50,7 +50,7 @@ function App() {
       const response = await fetch(`${API_URL}/api/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username, password }),
+        body: JSON.stringify({ identifier: loginIdentifier, password, role: selectedRole }),
       });
 
       const data = await response.json();
@@ -66,6 +66,10 @@ function App() {
         throw new Error("Selecciona el acceso que corresponde a tu usuario");
       }
 
+      if (selectedRole === "tutor" && data.role !== "tutor") {
+        throw new Error("Selecciona el acceso que corresponde a tu usuario");
+      }
+
       sessionStorage.setItem("edumatchUser", JSON.stringify(data));
       setUser(data);
       setPassword("");
@@ -77,7 +81,7 @@ function App() {
   const handleLogout = () => {
     sessionStorage.removeItem("edumatchUser");
     setUser(null);
-    setUsername("");
+    setLoginIdentifier("");
     setPassword("");
     setLoginError("");
     setSelectedRole("alumno");
@@ -114,6 +118,13 @@ function App() {
                   </button>
                   <button
                     type="button"
+                    className={selectedRole === "tutor" ? "role-btn active" : "role-btn"}
+                    onClick={() => setSelectedRole("tutor")}
+                  >
+                    Tutor
+                  </button>
+                  <button
+                    type="button"
                     className={selectedRole === "admin" ? "role-btn active" : "role-btn"}
                     onClick={() => setSelectedRole("admin")}
                   >
@@ -123,13 +134,18 @@ function App() {
 
                 <form onSubmit={handleLogin}>
                   <div className="input-group">
-                    <label htmlFor="username">Nombre de usuario</label>
+                    <label htmlFor="username">Matrícula escolar</label>
                     <input
                       id="username"
                       className="dark-input"
                       type="text"
-                      value={username}
-                      onChange={(event) => setUsername(event.target.value)}
+                      value={loginIdentifier}
+                      onChange={(event) => setLoginIdentifier(event.target.value)}
+                      autoComplete="username"
+                      inputMode="numeric"
+                      placeholder="Ingresa tu matrícula de 11 dígitos"
+                      pattern="[0-9]{11}"
+                      maxLength={11}
                       required
                     />
                   </div>

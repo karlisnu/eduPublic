@@ -4,6 +4,7 @@
 CREATE TABLE IF NOT EXISTS users (
   id INT UNSIGNED NOT NULL AUTO_INCREMENT,
   username VARCHAR(80) NOT NULL,
+  login_identifier CHAR(11) NULL,
   email VARCHAR(255) NOT NULL,
   password_hash VARCHAR(255) NOT NULL,
   role ENUM('admin', 'alumno', 'tutor') NOT NULL,
@@ -13,10 +14,13 @@ CREATE TABLE IF NOT EXISTS users (
   updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
   UNIQUE KEY uq_users_username (username),
+  UNIQUE KEY uq_users_login_identifier (login_identifier),
   UNIQUE KEY uq_users_email (email),
   INDEX idx_users_role_status (role, account_status),
   CONSTRAINT chk_users_username_letters
     CHECK (REGEXP_LIKE(username, '^[[:alpha:]]+$')),
+  CONSTRAINT chk_users_login_identifier_format
+    CHECK (login_identifier IS NULL OR REGEXP_LIKE(login_identifier, '^[0-9]{11}$')),
   CONSTRAINT chk_users_email_format
     CHECK (REGEXP_LIKE(email, '^[^[:space:]@]+@[^[:space:]@]+[.][^[:space:]@]+$')),
   CONSTRAINT chk_users_approval_date

@@ -13,7 +13,54 @@ app.use("/Alumnos/html", express.static(path.join(__dirname, "../../Alumnos/html
 app.use("/imagenes", express.static(path.join(__dirname, "../../imagenes")));
 
 const fallbackUsers = [
-  { id: 1, username: "alumno", password_hash: hashPassword("alumno123"), role: "alumno", account_status: "approved" },
+  {
+    id: 1,
+    username: "alumno",
+    student_number: "20260000001",
+    password_hash: hashPassword("AlumnoA1!"),
+    role: "alumno",
+    account_status: "approved",
+  },
+  {
+    id: 2,
+    username: "estudianteuno",
+    student_number: "20260000002",
+    password_hash: hashPassword("AlumnoB2!"),
+    role: "alumno",
+    account_status: "approved",
+  },
+  {
+    id: 3,
+    username: "estudiantedos",
+    student_number: "20260000003",
+    password_hash: hashPassword("AlumnoC3!"),
+    role: "alumno",
+    account_status: "approved",
+  },
+  {
+    id: 4,
+    username: "tutor",
+    student_number: "20260000004",
+    password_hash: hashPassword("TutorA1!"),
+    role: "tutor",
+    account_status: "approved",
+  },
+  {
+    id: 5,
+    username: "tutoruno",
+    student_number: "20260000005",
+    password_hash: hashPassword("TutorB2!"),
+    role: "tutor",
+    account_status: "approved",
+  },
+  {
+    id: 6,
+    username: "admin",
+    student_number: "20260000006",
+    password_hash: hashPassword("AdminA1!"),
+    role: "admin",
+    account_status: "approved",
+  },
 ];
 
 const fallbackTutors = [
@@ -35,6 +82,13 @@ function verifyPassword(password, storedHash) {
   return crypto.timingSafeEqual(Buffer.from(hash, "hex"), Buffer.from(calculatedHash, "hex"));
 }
 
+function isValidPassword(password) {
+  return password.length >= 6 &&
+    /\p{Lu}/u.test(password) &&
+    /\p{N}/u.test(password) &&
+    /[^\p{L}\p{N}]/u.test(password);
+}
+
 const prepareDatabase = async () => {
   const dbReady = await isDbAvailable();
   if (!dbReady) {
@@ -43,7 +97,7 @@ const prepareDatabase = async () => {
   }
 
   const [userColumns] = await pool.query("SHOW COLUMNS FROM users");
-  const requiredColumns = ["email", "account_status", "approved_at"];
+  const requiredColumns = ["email", "login_identifier", "account_status", "approved_at"];
   const availableColumns = new Set(userColumns.map((column) => column.Field));
   const missingColumns = requiredColumns.filter((column) => !availableColumns.has(column));
 
@@ -52,12 +106,13 @@ const prepareDatabase = async () => {
   }
 };
 
-app.get("/", (req, res) => {
+app.get("/", async (req, res) => {
+  const dbReady = await isDbAvailable();
   res.json({
     message: "API EDU-EduMatch funcionando",
-    login: "http://localhost:8000/Alumnos/html/Login.html",
+    login: "http://localhost:5173/",
     endpoints: ["GET /api/health", "POST /api/login", "POST /api/users", "GET /api/tutors"],
-    database: "fallback-memory",
+    database: dbReady ? "mysql" : "fallback-memory",
   });
 });
 
@@ -66,30 +121,71 @@ app.get("/api/health", (req, res) => {
 });
 
 app.post("/api/login", async (req, res, next) => {
-  const username = typeof req.body.username === "string" ? req.body.username.trim() : "";
+  const identifier = typeof req.body.username === "string"
+    ? req.body.username.trim()
+    : typeof req.body.identifier === "string"
+      ? req.body.identifier.trim()
+      : "";
   const password = typeof req.body.password === "string" ? req.body.password : "";
+  const role = typeof req.body.role === "string" ? req.body.role : "";
 
-  if (!username || !password) {
-    return res.status(400).json({ error: "Usuario y contraseña son obligatorios" });
+  if (!identifier || !password) {
+    return res.status(400).json({ error: "Matrícula o usuario y contraseña son obligatorios" });
+  }
+  if (role && !["alumno", "tutor", "admin"].includes(role)) {
+    return res.status(400).json({ error: "El tipo de cuenta no es válido" });
   }
 
   try {
     const dbReady = await isDbAvailable();
 
     if (!dbReady) {
-        const user = fallbackUsers.find((item) => item.username === username);
-        if (!user || user.account_status !== "approved" || !verifyPassword(password, user.password_hash)) {
+      const user = fallbackUsers.find((item) => (
+        item.student_number === identifier && (!role || item.role === role)
+      ));
+      if (!user || user.account_status !== "approved" || !verifyPassword(password, user.password_hash)) {
         return res.status(401).json({ error: "Usuario o contraseña incorrectos" });
       }
 
       return res.json({ id: user.id, username: user.username, role: user.role });
     }
 
-    const [rows] = await pool.query(
-      `SELECT id, username, password_hash, role, account_status
-       FROM users WHERE username = ? LIMIT 1`,
-      [username],
-    );
+    let query;
+    if (role === "alumno") {
+      query = pool.query(
+        `SELECT u.id, u.username, u.password_hash, u.role, u.account_status
+         FROM users u
+         INNER JOIN student_profiles sp ON sp.user_id = u.id
+         WHERE u.login_identifier = ? AND sp.student_number = u.login_identifier
+           AND u.role = 'alumno'
+         LIMIT 1`,
+        [identifier],
+      );
+    } else if (role === "tutor") {
+      query = pool.query(
+        `SELECT u.id, u.username, u.password_hash, u.role, u.account_status
+         FROM users u
+         INNER JOIN tutor_profiles tp ON tp.user_id = u.id
+         WHERE u.login_identifier = ? AND u.role = 'tutor'
+           AND tp.application_status = 'approved'
+         LIMIT 1`,
+        [identifier],
+      );
+    } else if (role === "admin") {
+      query = pool.query(
+        `SELECT id, username, password_hash, role, account_status
+         FROM users WHERE login_identifier = ? AND role = 'admin'
+         LIMIT 1`,
+        [identifier],
+      );
+    } else {
+      query = pool.query(
+        `SELECT id, username, password_hash, role, account_status
+         FROM users WHERE login_identifier = ? LIMIT 1`,
+        [identifier],
+      );
+    }
+    const [rows] = await query;
 
     if (
       rows.length === 0 ||
@@ -113,8 +209,13 @@ app.post("/api/users", async (req, res, next) => {
   const usernameContainsOnlyLetters = /^\p{L}+$/u.test(username);
   const emailHasValidFormat = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 
-  if (username.length < 3 || !usernameContainsOnlyLetters || password.length < 6 || !emailHasValidFormat) {
-    return res.status(400).json({ error: "Usuario, correo y contraseña tienen un formato inválido" });
+  if (username.length < 3 || !usernameContainsOnlyLetters || !emailHasValidFormat) {
+    return res.status(400).json({ error: "El usuario o el correo tienen un formato inválido" });
+  }
+  if (!isValidPassword(password)) {
+    return res.status(400).json({
+      error: "La contraseña debe tener al menos 6 caracteres, una mayúscula, un número y un carácter especial",
+    });
   }
 
   try {

@@ -9,7 +9,6 @@ const pool = mysql.createPool({
   waitForConnections: true,
   connectionLimit: 10,
   connectTimeout: 2000,
-  timeout: 2000,
 });
 
 const isDbAvailable = async () => {
