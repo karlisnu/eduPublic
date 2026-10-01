@@ -11,13 +11,4 @@ const pool = mysql.createPool({
   connectTimeout: 2000,
 });
 
-const isDbAvailable = async () => {
-  try {
-    await pool.query("SELECT 1");
-    return true;
-  } catch (error) {
-    return false;
-  }
-};
-
-module.exports = { pool, isDbAvailable };
+module.exports = { pool };

@@ -23,15 +23,15 @@ SET login_identifier = CASE username
 END
 WHERE username IN ('tutor', 'tutoruno', 'admin');
 
+-- Inactive development-only catalog rows keep the seeded demo profile valid.
+-- They are never offered for public registration or represented as official values.
 INSERT INTO careers (name, is_active)
-SELECT 'Carrera de prueba', TRUE
-WHERE NOT EXISTS (SELECT 1 FROM careers WHERE is_active = TRUE)
-ON DUPLICATE KEY UPDATE is_active = TRUE;
+VALUES ('[DEMO ONLY] Unverified career', FALSE)
+ON DUPLICATE KEY UPDATE is_active = FALSE;
 
 INSERT INTO campuses (name, is_active)
-SELECT 'Campus de prueba', TRUE
-WHERE NOT EXISTS (SELECT 1 FROM campuses WHERE is_active = TRUE)
-ON DUPLICATE KEY UPDATE is_active = TRUE;
+VALUES ('[DEMO ONLY] Unverified campus', FALSE)
+ON DUPLICATE KEY UPDATE is_active = FALSE;
 
 INSERT INTO student_profiles
   (user_id, first_name, last_name, student_number, career_id, campus_id, phone)
@@ -46,8 +46,8 @@ FROM (
   SELECT 'estudiantedos', 'Diego', 'Martinez', '20260000003', '66212345670'
 ) profiles
 JOIN users u ON u.username = profiles.username AND u.role = 'alumno'
-CROSS JOIN (SELECT id FROM careers WHERE is_active = TRUE ORDER BY id LIMIT 1) career
-CROSS JOIN (SELECT id FROM campuses WHERE is_active = TRUE ORDER BY id LIMIT 1) campus
+CROSS JOIN (SELECT id FROM careers WHERE name = '[DEMO ONLY] Unverified career') career
+CROSS JOIN (SELECT id FROM campuses WHERE name = '[DEMO ONLY] Unverified campus') campus
 WHERE TRUE
 ON DUPLICATE KEY UPDATE
   first_name = VALUES(first_name),

@@ -96,7 +96,6 @@ ALTER TABLE users
     CHECK (REGEXP_LIKE(email, '^[^[:space:]@]+@[^[:space:]@]+[.][^[:space:]@]+$'));
 
 ALTER TABLE tutor_profiles
-  DROP COLUMN availability,
   MODIFY bio VARCHAR(100) NULL,
   MODIFY experience VARCHAR(100) NOT NULL,
   ADD CONSTRAINT chk_tutor_profiles_first_name
@@ -115,8 +114,7 @@ ALTER TABLE subjects
     );
 
 ALTER TABLE tutor_ratings
-  MODIFY review VARCHAR(50) NULL,
-  DROP COLUMN updated_at;
+  MODIFY review VARCHAR(50) NULL;
 
 ALTER TABLE student_evaluations
   MODIFY comments VARCHAR(50) NULL;

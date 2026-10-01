@@ -56,17 +56,49 @@ The current release is a functional frontend prototype built with HTML, CSS, and
 
 ## How to Run
 
-1. Clone the repository and open it in VS Code.
-2. Open `Alumnos/html/index.html` directly, or use the Dev Container.
-3. For a local HTTP server, run:
+1. Open the repository in the Dev Container so the backend can resolve the MySQL service as `db`.
+2. Prepare the schema and load local demo records:
 
 ```bash
-cd frontend
-npm install
-npm run dev
+npm --prefix backend run db:setup
 ```
 
-The prototype is then available at `http://localhost:5173`.
+This applies pending SQL migrations and then inserts local development accounts
+and example data. It does not delete existing records. The seed creates inactive,
+explicitly demo-only career and campus entries for the example student; they are
+not official catalog values and cannot be selected for new registrations. Import
+verified university catalogs before accepting real student registrations.
+
+3. Start the backend and frontend in separate terminals:
+
+```bash
+npm --prefix backend run dev
+npm --prefix frontend run dev -- --host 0.0.0.0
+```
+
+The frontend is available at `http://localhost:5173`, and the API at
+`http://localhost:8000`. The backend requires MySQL; if the database is
+unavailable, it exits or returns an error instead of pretending to save data in
+memory.
+
+Local development accounts (only after running the seed):
+
+| Role | Login | Password |
+| --- | --- | --- |
+| Student | `20260000001` | `AlumnoA1!` |
+| Tutor | `tutor` | `TutorA1!` |
+| Administrator | `admin` | `AdminA1!` |
+
+The student number above is synthetic demo data, not proof of enrollment.
+Never use these accounts or their known passwords in production. The database
+seed command refuses to run when `NODE_ENV=production`.
+
+The API exposes active registration catalogs at `GET /api/catalogs`. Registration
+uses `POST /api/users` and writes the account plus its student or tutor profile
+in one transaction. Student registrations must reference active career and campus
+IDs from that endpoint; those accounts and student-number verification remain
+pending until approved through the supported administrative process. Tutor
+registrations also remain pending approval.
 
 ## Dev Container and MySQL
 
@@ -76,7 +108,15 @@ The Dev Container starts a MySQL 8.4.3 service named `db` with database `appdb` 
 mysql -h db -u dev -pdev appdb -e "SELECT 1;"
 ```
 
-The container runs `bash .devcontainer/setup.sh` after creation and installs the frontend dependencies automatically.
+MySQL data is stored in the `edumatch_mysql_data` named volume and remains
+available when the service container is recreated. The container runs
+`bash .devcontainer/setup.sh` after creation and installs the frontend
+dependencies automatically. Run `npm --prefix backend run db:setup` after the
+database is healthy and whenever new migrations or local seed data are needed.
+
+Outside the Dev Container, copy `backend/.env.example` to `backend/.env` and set
+`DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, and `DB_NAME` to match a reachable
+MySQL instance. Keep `.env` local and do not commit credentials.
 
 The project architecture and planned API boundary are documented in [`docs/architecture.md`](docs/architecture.md). Pull requests are validated by [`.github/workflows/ci.yml`](.github/workflows/ci.yml).
 The complete Week 1 verification procedure is documented in [`docs/week1-verification.md`](docs/week1-verification.md).
