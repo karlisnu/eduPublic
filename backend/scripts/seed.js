@@ -7,6 +7,10 @@ const seedsDirectory = path.join(__dirname, "../sql/seeds");
 const splitStatements = (sql) => sql.split(";").map((statement) => statement.trim()).filter(Boolean);
 
 async function seed() {
+  if (process.env.NODE_ENV === "production") {
+    throw new Error("Development seed accounts must not be loaded in production");
+  }
+
   const files = (await fs.readdir(seedsDirectory))
     .filter((file) => file.endsWith(".sql"))
     .sort();

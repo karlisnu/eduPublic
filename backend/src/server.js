@@ -3,7 +3,7 @@ const cors = require("cors");
 const crypto = require("crypto");
 const path = require("path");
 require("dotenv").config();
-const { pool, isDbAvailable } = require("./db");
+const { pool } = require("./db");
 
 const app = express();
 
@@ -12,63 +12,6 @@ app.use(express.json());
 app.use("/Alumnos/html", express.static(path.join(__dirname, "../../Alumnos/html")));
 app.use("/imagenes", express.static(path.join(__dirname, "../../imagenes")));
 
-const fallbackUsers = [
-  {
-    id: 1,
-    username: "alumno",
-    student_number: "20260000001",
-    password_hash: hashPassword("AlumnoA1!"),
-    role: "alumno",
-    account_status: "approved",
-  },
-  {
-    id: 2,
-    username: "estudianteuno",
-    student_number: "20260000002",
-    password_hash: hashPassword("AlumnoB2!"),
-    role: "alumno",
-    account_status: "approved",
-  },
-  {
-    id: 3,
-    username: "estudiantedos",
-    student_number: "20260000003",
-    password_hash: hashPassword("AlumnoC3!"),
-    role: "alumno",
-    account_status: "approved",
-  },
-  {
-    id: 4,
-    username: "tutor",
-    student_number: "20260000004",
-    password_hash: hashPassword("TutorA1!"),
-    role: "tutor",
-    account_status: "approved",
-  },
-  {
-    id: 5,
-    username: "tutoruno",
-    student_number: "20260000005",
-    password_hash: hashPassword("TutorB2!"),
-    role: "tutor",
-    account_status: "approved",
-  },
-  {
-    id: 6,
-    username: "admin",
-    student_number: "20260000006",
-    password_hash: hashPassword("AdminA1!"),
-    role: "admin",
-    account_status: "approved",
-  },
-];
-
-const fallbackTutors = [
-  { id: 1, name: "Ana García", subject: "Matemáticas", experience: "5 años", rating: 4.9, bio: "Especialista en álgebra y cálculo.", is_available: true },
-  { id: 2, name: "Luis Ramírez", subject: "Física", experience: "4 años", rating: 4.8, bio: "Apoya con ejercicios y teoría.", is_available: true },
-  { id: 3, name: "Marina López", subject: "Programación", experience: "6 años", rating: 5.0, bio: "Clases prácticas de JavaScript y lógica.", is_available: true },
-];
-
 function hashPassword(password, salt = crypto.randomBytes(16).toString("hex")) {
   const hash = crypto.scryptSync(password, salt, 64).toString("hex");
   return `${salt}:${hash}`;
@@ -76,7 +19,7 @@ function hashPassword(password, salt = crypto.randomBytes(16).toString("hex")) {
 
 function verifyPassword(password, storedHash) {
   const [salt, hash] = storedHash.split(":");
-  if (!salt || !hash) return false;
+  if (!salt || !/^[a-f\d]{128}$/i.test(hash || "")) return false;
 
   const calculatedHash = crypto.scryptSync(password, salt, 64).toString("hex");
   return crypto.timingSafeEqual(Buffer.from(hash, "hex"), Buffer.from(calculatedHash, "hex"));
@@ -89,66 +32,114 @@ function isValidPassword(password) {
     /[^\p{L}\p{N}]/u.test(password);
 }
 
+async function requireDatabase() {
+  try {
+    await pool.query("SELECT 1");
+  } catch (error) {
+    error.status = 503;
+    error.publicMessage = "MySQL no está disponible; los datos no se guardaron.";
+    throw error;
+  }
+}
+
 const prepareDatabase = async () => {
-  const dbReady = await isDbAvailable();
-  if (!dbReady) {
-    console.warn("MySQL no disponible. Usando almacenamiento en memoria para usuarios y tutores.");
-    return;
+  try {
+    await requireDatabase();
+  } catch (error) {
+    throw new Error(
+      "No se pudo conectar con MySQL. Inicia la base de datos y ejecuta `npm --prefix backend run db:setup`.",
+      { cause: error },
+    );
   }
 
-  const [userColumns] = await pool.query("SHOW COLUMNS FROM users");
-  const requiredColumns = ["email", "login_identifier", "account_status", "approved_at"];
-  const availableColumns = new Set(userColumns.map((column) => column.Field));
-  const missingColumns = requiredColumns.filter((column) => !availableColumns.has(column));
-
-  if (missingColumns.length > 0) {
-    throw new Error(`Database schema is missing required users columns: ${missingColumns.join(", ")}`);
+  const requiredColumnsByTable = {
+    users: ["id", "username", "login_identifier", "email", "password_hash", "role", "account_status", "approved_at"],
+    student_profiles: ["user_id", "student_number", "career_id", "campus_id"],
+    tutor_profiles: ["user_id", "application_status", "is_available"],
+    careers: ["id", "name", "is_active"],
+    campuses: ["id", "name", "is_active"],
+    subjects: ["id", "name"],
+    tutor_subjects: ["tutor_id", "subject_id"],
+    tutor_ratings: ["tutor_id", "rating"],
+  };
+  const [tableRows] = await pool.query("SHOW TABLES");
+  const existingTables = new Set(tableRows.map((row) => Object.values(row)[0]));
+  const schemaErrors = [];
+  for (const [table, requiredColumns] of Object.entries(requiredColumnsByTable)) {
+    if (!existingTables.has(table)) {
+      schemaErrors.push(`falta la tabla ${table}`);
+      continue;
+    }
+    const [columns] = await pool.query(`SHOW COLUMNS FROM \`${table}\``);
+    const availableColumns = new Set(columns.map((column) => column.Field));
+    const missingColumns = requiredColumns.filter((column) => !availableColumns.has(column));
+    if (missingColumns.length > 0) {
+      schemaErrors.push(`${table}: ${missingColumns.join(", ")}`);
+    }
+  }
+  if (schemaErrors.length > 0) {
+    throw new Error(
+      `Esquema MySQL incompleto (${schemaErrors.join("; ")}). Ejecuta \`npm --prefix backend run db:setup\`.`,
+    );
   }
 };
 
 app.get("/", async (req, res) => {
-  const dbReady = await isDbAvailable();
+  await requireDatabase();
   res.json({
     message: "API EDU-EduMatch funcionando",
     login: "http://localhost:5173/",
-    endpoints: ["GET /api/health", "POST /api/login", "POST /api/users", "GET /api/tutors"],
-    database: dbReady ? "mysql" : "fallback-memory",
+    endpoints: ["GET /api/health", "GET /api/catalogs", "POST /api/login", "POST /api/users", "GET /api/tutors"],
+    database: "mysql",
   });
 });
 
-app.get("/api/health", (req, res) => {
-  res.json({ message: "Backend funcionando" });
+app.get("/api/health", async (req, res, next) => {
+  try {
+    await requireDatabase();
+    res.json({ message: "Backend funcionando", database: "mysql" });
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get("/api/catalogs", async (req, res, next) => {
+  try {
+    await requireDatabase();
+    const [careers, campuses, subjects] = await Promise.all([
+      pool.query("SELECT id, name FROM careers WHERE is_active = TRUE ORDER BY name"),
+      pool.query("SELECT id, name FROM campuses WHERE is_active = TRUE ORDER BY name"),
+      pool.query("SELECT id, name FROM subjects ORDER BY name"),
+    ]);
+    res.json({
+      careers: careers[0],
+      campuses: campuses[0],
+      subjects: subjects[0],
+    });
+  } catch (error) {
+    next(error);
+  }
 });
 
 app.post("/api/login", async (req, res, next) => {
-  const identifier = typeof req.body.username === "string"
-    ? req.body.username.trim()
-    : typeof req.body.identifier === "string"
-      ? req.body.identifier.trim()
+  const body = req.body && typeof req.body === "object" ? req.body : {};
+  const identifier = typeof body.username === "string"
+    ? body.username.trim()
+    : typeof body.identifier === "string"
+      ? body.identifier.trim()
       : "";
-  const password = typeof req.body.password === "string" ? req.body.password : "";
-  const role = typeof req.body.role === "string" ? req.body.role : "";
+  const password = typeof body.password === "string" ? body.password : "";
+  const role = typeof body.role === "string" ? body.role : "";
 
-  if (!identifier || !password) {
+  if (!identifier || !password || !role) {
     return res.status(400).json({ error: "Matrícula o usuario y contraseña son obligatorios" });
   }
-  if (role && !["alumno", "tutor", "admin"].includes(role)) {
+  if (!["alumno", "tutor", "admin"].includes(role)) {
     return res.status(400).json({ error: "El tipo de cuenta no es válido" });
   }
 
   try {
-    const dbReady = await isDbAvailable();
-
-    if (!dbReady) {
-      const user = fallbackUsers.find((item) => (
-        item.student_number === identifier && (!role || item.role === role)
-      ));
-      if (!user || user.account_status !== "approved" || !verifyPassword(password, user.password_hash)) {
-        return res.status(401).json({ error: "Usuario o contraseña incorrectos" });
-      }
-
-      return res.json({ id: user.id, username: user.username, role: user.role });
-    }
+    await requireDatabase();
 
     let query;
     if (role === "alumno") {
@@ -163,36 +154,33 @@ app.post("/api/login", async (req, res, next) => {
       );
     } else if (role === "tutor") {
       query = pool.query(
-        `SELECT u.id, u.username, u.password_hash, u.role, u.account_status
+        `SELECT u.id, u.username, u.password_hash, u.role, u.account_status,
+                tp.application_status
          FROM users u
          INNER JOIN tutor_profiles tp ON tp.user_id = u.id
-         WHERE u.login_identifier = ? AND u.role = 'tutor'
-           AND tp.application_status = 'approved'
+         WHERE (u.username = ? OR u.email = ?) AND u.role = 'tutor'
          LIMIT 1`,
-        [identifier],
+        [identifier, identifier],
       );
     } else if (role === "admin") {
       query = pool.query(
         `SELECT id, username, password_hash, role, account_status
-         FROM users WHERE login_identifier = ? AND role = 'admin'
+         FROM users
+         WHERE (login_identifier = ? OR username = ? OR email = ?) AND role = 'admin'
          LIMIT 1`,
-        [identifier],
-      );
-    } else {
-      query = pool.query(
-        `SELECT id, username, password_hash, role, account_status
-         FROM users WHERE login_identifier = ? LIMIT 1`,
-        [identifier],
+        [identifier, identifier, identifier],
       );
     }
     const [rows] = await query;
 
-    if (
-      rows.length === 0 ||
-      rows[0].account_status !== "approved" ||
-      !verifyPassword(password, rows[0].password_hash)
-    ) {
+    if (rows.length === 0 || !verifyPassword(password, rows[0].password_hash)) {
       return res.status(401).json({ error: "Usuario o contraseña incorrectos" });
+    }
+    if (rows[0].account_status !== "approved") {
+      return res.status(403).json({ error: "La cuenta está pendiente de aprobación o no está habilitada" });
+    }
+    if (role === "tutor" && rows[0].application_status !== "approved") {
+      return res.status(403).json({ error: "La solicitud de tutor está pendiente de aprobación" });
     }
 
     res.json({ id: rows[0].id, username: rows[0].username, role: rows[0].role });
@@ -202,14 +190,19 @@ app.post("/api/login", async (req, res, next) => {
 });
 
 app.post("/api/users", async (req, res, next) => {
-  const username = typeof req.body.username === "string" ? req.body.username.trim() : "";
-  const password = typeof req.body.password === "string" ? req.body.password : "";
-  const role = req.body.role === "tutor" ? "tutor" : "alumno";
-  const email = typeof req.body.email === "string" ? req.body.email.trim() : "";
+  const body = req.body && typeof req.body === "object" ? req.body : {};
+  const username = typeof body.username === "string" ? body.username.trim() : "";
+  const password = typeof body.password === "string" ? body.password : "";
+  const role = typeof body.role === "string" ? body.role : "";
+  const email = typeof body.email === "string" ? body.email : "";
   const usernameContainsOnlyLetters = /^\p{L}+$/u.test(username);
   const emailHasValidFormat = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+  const firstName = typeof body.firstName === "string" ? body.firstName.trim() : "";
+  const lastName = typeof body.lastName === "string" ? body.lastName.trim() : "";
+  const isValidName = (value) => /^\p{L}+$/u.test(value);
 
-  if (username.length < 3 || !usernameContainsOnlyLetters || !emailHasValidFormat) {
+  if (username.length < 3 || username.length > 80 ||
+      email.length > 255 || !usernameContainsOnlyLetters || !emailHasValidFormat) {
     return res.status(400).json({ error: "El usuario o el correo tienen un formato inválido" });
   }
   if (!isValidPassword(password)) {
@@ -217,51 +210,116 @@ app.post("/api/users", async (req, res, next) => {
       error: "La contraseña debe tener al menos 6 caracteres, una mayúscula, un número y un carácter especial",
     });
   }
+  if (!["alumno", "tutor"].includes(role)) {
+    return res.status(400).json({ error: "El rol de registro no es válido" });
+  }
+  if (!isValidName(firstName) || firstName.length > 80 ||
+      !isValidName(lastName) || lastName.length > 120) {
+    return res.status(400).json({ error: "El nombre y apellido solo pueden contener letras" });
+  }
 
+  let studentNumber = "";
+  let careerId;
+  let campusId;
+  let phone = "";
+  let bio = "";
+  let experience = "";
+  if (role === "alumno") {
+    studentNumber = typeof body.studentNumber === "string" ? body.studentNumber : "";
+    careerId = Number(body.careerId);
+    campusId = Number(body.campusId);
+    phone = typeof body.phone === "string" ? body.phone : "";
+    if (!/^\d{11}$/.test(studentNumber) || !/^\d{11}$/.test(phone)) {
+      return res.status(400).json({ error: "La matrícula y el teléfono deben tener exactamente 11 dígitos" });
+    }
+    if (!Number.isSafeInteger(careerId) || careerId < 1 || !Number.isSafeInteger(campusId) || campusId < 1) {
+      return res.status(400).json({ error: "Selecciona una carrera y un campus válidos" });
+    }
+  } else {
+    bio = typeof body.bio === "string" ? body.bio.trim() : "";
+    experience = typeof body.experience === "string" ? body.experience.trim() : "";
+    if (bio.length > 100 || experience.length < 1 || experience.length > 100) {
+      return res.status(400).json({ error: "La biografía y la experiencia deben tener como máximo 100 caracteres" });
+    }
+  }
+
+  let connection;
+  let transactionStarted = false;
   try {
-    const dbReady = await isDbAvailable();
+    await requireDatabase();
+    connection = await pool.getConnection();
+    await connection.beginTransaction();
+    transactionStarted = true;
 
-    if (!dbReady) {
-      const existingUser = fallbackUsers.find((user) => user.username === username);
-      if (existingUser) {
-        return res.status(409).json({ error: "El usuario ya existe" });
+    if (role === "alumno") {
+      const [careers] = await connection.query(
+        "SELECT id FROM careers WHERE id = ? AND is_active = TRUE",
+        [careerId],
+      );
+      const [campuses] = await connection.query(
+        "SELECT id FROM campuses WHERE id = ? AND is_active = TRUE",
+        [campusId],
+      );
+      if (careers.length === 0 || campuses.length === 0) {
+        await connection.rollback();
+        transactionStarted = false;
+        return res.status(400).json({ error: "La carrera o campus seleccionado no está activo en el catálogo" });
       }
-
-      const newUser = {
-        id: fallbackUsers.length + 1,
-        username,
-        password_hash: hashPassword(password),
-        role,
-        account_status: "pending",
-      };
-      fallbackUsers.push(newUser);
-      return res.status(201).json({ id: newUser.id, username, role });
     }
 
-    const [result] = await pool.query(
-      "INSERT INTO users (username, email, password_hash, role) VALUES (?, ?, ?, ?)",
-      [username, email, hashPassword(password), role],
+    const [result] = await connection.query(
+      `INSERT INTO users
+        (username, login_identifier, email, password_hash, role, account_status)
+       VALUES (?, ?, ?, ?, ?, 'pending')`,
+      [username, role === "alumno" ? studentNumber : null, email, hashPassword(password), role],
     );
-    res.status(201).json({ id: result.insertId, username, role });
+
+    if (role === "alumno") {
+      await connection.query(
+        `INSERT INTO student_profiles
+          (user_id, first_name, last_name, student_number, student_number_verification_status,
+           career_id, campus_id, phone)
+         VALUES (?, ?, ?, ?, 'pending', ?, ?, ?)`,
+        [result.insertId, firstName, lastName, studentNumber, careerId, campusId, phone],
+      );
+    } else {
+      await connection.query(
+        `INSERT INTO tutor_profiles
+          (user_id, first_name, last_name, bio, experience, application_status)
+         VALUES (?, ?, ?, ?, ?, 'pending')`,
+        [result.insertId, firstName, lastName, bio || null, experience],
+      );
+    }
+
+    await connection.commit();
+    transactionStarted = false;
+    res.status(201).json({
+      id: result.insertId,
+      username,
+      role,
+      accountStatus: "pending",
+      ...(role === "tutor"
+        ? { applicationStatus: "pending" }
+        : { studentNumberVerificationStatus: "pending" }),
+    });
   } catch (error) {
+    if (connection && transactionStarted) {
+      await connection.rollback();
+      transactionStarted = false;
+    }
     if (error.code === "ER_DUP_ENTRY") {
       return res.status(409).json({ error: "El usuario ya existe" });
     }
     next(error);
+  } finally {
+    if (connection) connection.release();
   }
 });
 
 app.get("/api/tutors", async (req, res, next) => {
   try {
-    const dbReady = await isDbAvailable();
+    await requireDatabase();
     const subject = typeof req.query.subject === "string" ? req.query.subject.trim() : "";
-
-    if (!dbReady) {
-      const filtered = subject
-        ? fallbackTutors.filter((tutor) => tutor.subject.toLowerCase().includes(subject.toLowerCase()))
-        : fallbackTutors;
-      return res.json(filtered);
-    }
 
     const query = `
       SELECT
@@ -299,15 +357,7 @@ app.get("/api/tutors/:id", async (req, res, next) => {
   }
 
   try {
-    const dbReady = await isDbAvailable();
-
-    if (!dbReady) {
-      const tutor = fallbackTutors.find((item) => item.id === id && item.is_available);
-      if (!tutor) {
-        return res.status(404).json({ error: "Tutor no encontrado" });
-      }
-      return res.json(tutor);
-    }
+    await requireDatabase();
 
     const [rows] = await pool.query(
       `SELECT
@@ -344,7 +394,12 @@ app.get("/api/tutors/:id", async (req, res, next) => {
 
 app.use((error, req, res, next) => {
   console.error(error);
-  res.status(500).json({ error: "Error interno del servidor" });
+  const status = Number.isInteger(error.status) ? error.status : 500;
+  res.status(status).json({
+    error: error.publicMessage || (status === 503
+      ? "MySQL no está disponible; los datos no se guardaron."
+      : "Error interno del servidor"),
+  });
 });
 
 const PORT = process.env.PORT || 8000;
@@ -356,6 +411,8 @@ prepareDatabase()
     });
   })
   .catch((error) => {
-    console.error("No se pudieron preparar los usuarios iniciales", error);
-    process.exitCode = 1;
+    console.error("No se pudo iniciar el backend:", error.message);
+    pool.end().finally(() => {
+      process.exitCode = 1;
+    });
   });

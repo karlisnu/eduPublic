@@ -151,7 +151,9 @@ function App() {
 
                 <form onSubmit={handleLogin}>
                   <div className="input-group">
-                    <label htmlFor="username">Matrícula escolar</label>
+                    <label htmlFor="username">
+                      {selectedRole === "alumno" ? "Matrícula escolar" : "Usuario o correo"}
+                    </label>
                     <input
                       id="username"
                       className="dark-input"
@@ -159,10 +161,12 @@ function App() {
                       value={loginIdentifier}
                       onChange={(event) => setLoginIdentifier(event.target.value)}
                       autoComplete="username"
-                      inputMode="numeric"
-                      placeholder="Ingresa tu matrícula de 11 dígitos"
-                      pattern="[0-9]{11}"
-                      maxLength={11}
+                      inputMode={selectedRole === "alumno" ? "numeric" : "text"}
+                      placeholder={selectedRole === "alumno"
+                        ? "Ingresa tu matrícula de 11 dígitos"
+                        : "Ingresa tu usuario o correo"}
+                      pattern={selectedRole === "alumno" ? "[0-9]{11}" : undefined}
+                      maxLength={selectedRole === "alumno" ? 11 : undefined}
                       required
                     />
                   </div>

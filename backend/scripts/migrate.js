@@ -86,6 +86,52 @@ async function validateProfileRulesMigration(connection) {
   }
 }
 
+async function prepareProfileRulesMigration(connection) {
+  await connection.query(`
+    CREATE TABLE IF NOT EXISTS careers (
+      id INT UNSIGNED NOT NULL AUTO_INCREMENT,
+      name VARCHAR(160) NOT NULL,
+      is_active BOOLEAN NOT NULL DEFAULT FALSE,
+      PRIMARY KEY (id),
+      UNIQUE KEY uq_careers_name (name)
+    )
+  `);
+  await connection.query(`
+    CREATE TABLE IF NOT EXISTS campuses (
+      id INT UNSIGNED NOT NULL AUTO_INCREMENT,
+      name VARCHAR(160) NOT NULL,
+      is_active BOOLEAN NOT NULL DEFAULT FALSE,
+      PRIMARY KEY (id),
+      UNIQUE KEY uq_campuses_name (name)
+    )
+  `);
+
+  for (const table of ["careers", "campuses"]) {
+    const [columns] = await connection.query(`SHOW COLUMNS FROM \`${table}\``);
+    if (!columns.some((column) => column.Field === "is_active")) {
+      await connection.query(
+        `ALTER TABLE \`${table}\` ADD COLUMN is_active BOOLEAN NOT NULL DEFAULT FALSE`,
+      );
+    }
+  }
+
+  const [tutorColumns] = await connection.query("SHOW COLUMNS FROM tutor_profiles");
+  const tutorColumnNames = new Set(tutorColumns.map((column) => column.Field));
+  if (!tutorColumnNames.has("is_available")) {
+    await connection.query(
+      "ALTER TABLE tutor_profiles ADD COLUMN is_available BOOLEAN NOT NULL DEFAULT TRUE",
+    );
+  }
+  if (tutorColumnNames.has("availability")) {
+    await connection.query("ALTER TABLE tutor_profiles DROP COLUMN availability");
+  }
+
+  const [ratingColumns] = await connection.query("SHOW COLUMNS FROM tutor_ratings");
+  if (ratingColumns.some((column) => column.Field === "updated_at")) {
+    await connection.query("ALTER TABLE tutor_ratings DROP COLUMN updated_at");
+  }
+}
+
 async function migrate() {
   const connection = await pool.getConnection();
   try {
@@ -108,6 +154,7 @@ async function migrate() {
       if (applied.has(file)) continue;
       if (file === "002_apply_profile_data_rules.sql") {
         await validateProfileRulesMigration(connection);
+        await prepareProfileRulesMigration(connection);
       }
       const sql = await fs.readFile(path.join(migrationsDirectory, file), "utf8");
       for (const statement of splitStatements(sql)) {

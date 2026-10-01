@@ -20,11 +20,11 @@ erDiagram
     CAREERS ||--o{ STUDENT_PROFILES : selected_for
     CAMPUSES ||--o{ STUDENT_PROFILES : selected_for
     TUTOR_PROFILES }o--o{ SUBJECTS : teaches
-    TUTOR_PROFILES ||--o{ CONNECTIONS : manages
-    STUDENT_PROFILES ||--o{ CONNECTIONS : requests
-    CONNECTIONS ||--o{ TUTOR_RATINGS : receives
-    CONNECTIONS ||--o{ STUDENT_EVALUATIONS : contains
-    CONNECTIONS ||--o{ ACADEMIC_FILES : authorizes
+    TUTOR_PROFILES ||--o{ TUTOR_STUDENT_CONNECTIONS : manages
+    STUDENT_PROFILES ||--o{ TUTOR_STUDENT_CONNECTIONS : requests
+    TUTOR_STUDENT_CONNECTIONS ||--o{ TUTOR_RATINGS : receives
+    TUTOR_STUDENT_CONNECTIONS ||--o{ STUDENT_EVALUATIONS : contains
+    TUTOR_STUDENT_CONNECTIONS ||--o{ ACADEMIC_FILES : authorizes
     TUTOR_PROFILES ||--o{ TUTOR_RATINGS : receives
     STUDENT_PROFILES ||--o{ TUTOR_RATINGS : writes
     TUTOR_PROFILES ||--o{ STUDENT_EVALUATIONS : writes
@@ -84,7 +84,7 @@ erDiagram
         text description max 100 words
     }
 
-    CONNECTIONS {
+    TUTOR_STUDENT_CONNECTIONS {
         int id PK
         int tutor_id FK
         int student_id FK
