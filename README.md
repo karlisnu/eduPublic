@@ -100,6 +100,19 @@ IDs from that endpoint; those accounts and student-number verification remain
 pending until approved through the supported administrative process. Tutor
 registrations also remain pending approval.
 
+Authentication uses a server-side MySQL session and an `HttpOnly`, `SameSite=Strict`
+cookie. Apply migrations with `npm --prefix backend run db:migrate` (or rerun
+`db:setup`); existing installations create the `auth_sessions` table through
+migration 004. The browser restores the login with `GET /api/session` and ends it
+with `POST /api/logout`. Tutor search requires an authenticated student session.
+Administrative approval endpoints require an authenticated administrator:
+`GET /api/admin/approvals/pending` and
+`PATCH /api/admin/users/:id/approval` with `{"decision":"approved"}` or
+`{"decision":"rejected"}`. Approval decisions are recorded in `approval_events`.
+Set `FRONTEND_ORIGIN` when the browser frontend is hosted at a different origin
+within the same site;
+production deployments must use HTTPS so the session cookie is marked `Secure`.
+
 ## Dev Container and MySQL
 
 The Dev Container starts a MySQL 8.4.3 service named `db` with database `appdb` and development credentials:

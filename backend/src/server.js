@@ -4,10 +4,23 @@ const crypto = require("crypto");
 const path = require("path");
 require("dotenv").config();
 const { pool } = require("./db");
+const {
+  SESSION_MAX_AGE_SECONDS,
+  clearSessionCookie,
+  createRequireAuthentication,
+  hashSessionToken,
+  readSessionToken,
+  requireRoles,
+  sessionCookie,
+} = require("./auth");
 
 const app = express();
+const requireAuthentication = createRequireAuthentication(pool);
 
-app.use(cors());
+app.use(cors({
+  origin: process.env.FRONTEND_ORIGIN || "http://localhost:5173",
+  credentials: true,
+}));
 app.use(express.json());
 app.use("/Alumnos/html", express.static(path.join(__dirname, "../../Alumnos/html")));
 app.use("/imagenes", express.static(path.join(__dirname, "../../imagenes")));
@@ -54,6 +67,8 @@ const prepareDatabase = async () => {
 
   const requiredColumnsByTable = {
     users: ["id", "username", "login_identifier", "email", "password_hash", "role", "account_status", "approved_at"],
+    auth_sessions: ["id", "user_id", "token_hash", "expires_at"],
+    approval_events: ["id", "user_id", "reviewer_id", "decision", "created_at"],
     student_profiles: ["user_id", "student_number", "career_id", "campus_id"],
     tutor_profiles: ["user_id", "application_status", "is_available"],
     careers: ["id", "name", "is_active"],
@@ -89,7 +104,17 @@ app.get("/", async (req, res) => {
   res.json({
     message: "API EDU-EduMatch funcionando",
     login: "http://localhost:5173/",
-    endpoints: ["GET /api/health", "GET /api/catalogs", "POST /api/login", "POST /api/users", "GET /api/tutors"],
+    endpoints: [
+      "GET /api/health",
+      "GET /api/catalogs",
+      "POST /api/login",
+      "GET /api/session",
+      "POST /api/logout",
+      "POST /api/users",
+      "GET /api/tutors",
+      "GET /api/admin/approvals/pending",
+      "PATCH /api/admin/users/:id/approval",
+    ],
     database: "mysql",
   });
 });
@@ -183,11 +208,143 @@ app.post("/api/login", async (req, res, next) => {
       return res.status(403).json({ error: "La solicitud de tutor está pendiente de aprobación" });
     }
 
+    const token = crypto.randomBytes(32).toString("hex");
+    const expiresAt = new Date(Date.now() + SESSION_MAX_AGE_SECONDS * 1000);
+    await pool.query("DELETE FROM auth_sessions WHERE expires_at <= NOW()");
+    await pool.query(
+      "INSERT INTO auth_sessions (user_id, token_hash, expires_at) VALUES (?, ?, ?)",
+      [rows[0].id, hashSessionToken(token), expiresAt],
+    );
+    res.setHeader("Set-Cookie", sessionCookie(token));
     res.json({ id: rows[0].id, username: rows[0].username, role: rows[0].role });
   } catch (error) {
     next(error);
   }
 });
+
+app.get("/api/session", requireAuthentication, (req, res) => {
+  res.json(req.auth);
+});
+
+app.post("/api/logout", async (req, res, next) => {
+  const token = readSessionToken(req);
+  try {
+    if (token) {
+      await pool.query("DELETE FROM auth_sessions WHERE token_hash = ?", [hashSessionToken(token)]);
+    }
+    res.setHeader("Set-Cookie", clearSessionCookie());
+    res.status(204).end();
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get(
+  "/api/admin/approvals/pending",
+  requireAuthentication,
+  requireRoles("admin"),
+  async (req, res, next) => {
+    try {
+      await requireDatabase();
+      const [rows] = await pool.query(
+        `SELECT u.id, u.username, u.email, u.role, u.account_status,
+                tp.application_status
+         FROM users u
+         LEFT JOIN tutor_profiles tp ON tp.user_id = u.id
+         WHERE (u.role = 'alumno' AND u.account_status = 'pending')
+            OR (u.role = 'tutor' AND
+                (u.account_status = 'pending' OR tp.application_status = 'pending'))
+         ORDER BY u.created_at ASC`,
+      );
+      res.json(rows);
+    } catch (error) {
+      next(error);
+    }
+  },
+);
+
+app.patch(
+  "/api/admin/users/:id/approval",
+  requireAuthentication,
+  requireRoles("admin"),
+  async (req, res, next) => {
+    const userId = Number(req.params.id);
+    const decision = typeof req.body?.decision === "string" ? req.body.decision : "";
+    const reason = typeof req.body?.reason === "string" ? req.body.reason.trim() : null;
+
+    if (!Number.isSafeInteger(userId) || userId < 1) {
+      return res.status(400).json({ error: "El id de usuario no es válido" });
+    }
+    if (!["approved", "rejected"].includes(decision)) {
+      return res.status(400).json({ error: "La decisión debe ser approved o rejected" });
+    }
+    if (req.body?.reason !== undefined && typeof req.body.reason !== "string") {
+      return res.status(400).json({ error: "El motivo debe ser texto" });
+    }
+    if (reason && reason.length > 1000) {
+      return res.status(400).json({ error: "El motivo no puede superar 1000 caracteres" });
+    }
+    if (userId === req.auth.id) {
+      return res.status(403).json({ error: "No puedes revisar tu propia cuenta" });
+    }
+
+    let connection;
+    let transactionStarted = false;
+    try {
+      await requireDatabase();
+      connection = await pool.getConnection();
+      await connection.beginTransaction();
+      transactionStarted = true;
+
+      const [users] = await connection.query(
+        `SELECT u.role, u.account_status, tp.application_status
+         FROM users u
+         LEFT JOIN tutor_profiles tp ON tp.user_id = u.id
+         WHERE u.id = ?
+         FOR UPDATE`,
+        [userId],
+      );
+      const target = users[0];
+      const isReviewable = target &&
+        ["alumno", "tutor"].includes(target.role) &&
+        (target.account_status === "pending" ||
+          (target.role === "tutor" && target.application_status === "pending"));
+      if (!isReviewable) {
+        await connection.rollback();
+        transactionStarted = false;
+        return res.status(404).json({ error: "No se encontró una solicitud pendiente para revisar" });
+      }
+
+      await connection.query(
+        "UPDATE users SET account_status = ?, approved_at = ? WHERE id = ?",
+        [decision, decision === "approved" ? new Date() : null, userId],
+      );
+      if (target.role === "tutor") {
+        await connection.query(
+          "UPDATE tutor_profiles SET application_status = ? WHERE user_id = ?",
+          [decision, userId],
+        );
+      }
+      await connection.query(
+        `INSERT INTO approval_events (user_id, reviewer_id, decision, reason)
+         VALUES (?, ?, ?, ?)`,
+        [userId, req.auth.id, decision, reason || null],
+      );
+
+      await connection.commit();
+      transactionStarted = false;
+      res.json({ id: userId, role: target.role, accountStatus: decision });
+    } catch (error) {
+      if (connection && transactionStarted) {
+        await connection.rollback();
+        transactionStarted = false;
+      }
+      next(error);
+    } finally {
+      if (connection) connection.release();
+    }
+  },
+);
 
 app.post("/api/users", async (req, res, next) => {
   const body = req.body && typeof req.body === "object" ? req.body : {};
@@ -316,7 +473,7 @@ app.post("/api/users", async (req, res, next) => {
   }
 });
 
-app.get("/api/tutors", async (req, res, next) => {
+app.get("/api/tutors", requireAuthentication, requireRoles("alumno"), async (req, res, next) => {
   try {
     await requireDatabase();
     const subject = typeof req.query.subject === "string" ? req.query.subject.trim() : "";
@@ -349,7 +506,7 @@ app.get("/api/tutors", async (req, res, next) => {
   }
 });
 
-app.get("/api/tutors/:id", async (req, res, next) => {
+app.get("/api/tutors/:id", requireAuthentication, requireRoles("alumno"), async (req, res, next) => {
   const id = Number(req.params.id);
 
   if (!Number.isInteger(id) || id < 1) {

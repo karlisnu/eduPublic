@@ -234,6 +234,31 @@ h1, h2, h3, p { margin-top: 0; }
 .search-box span { color: #c3553e; display: block; font-size: .68rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
 .search-box input { background: transparent; border: 0; color: #263238; font: 1rem 'Montserrat', sans-serif; margin-top: 8px; outline: 0; width: 100%; }
 .results { background: #fff; padding: 64px max(32px, calc((100% - 1180px) / 2)); }
+.admin-panel { margin: 54px auto; max-width: 1180px; padding: 0 32px 80px; }
+.approval-list { display: grid; gap: 14px; margin-top: 28px; }
+.approval-card {
+  align-items: center;
+  background: #fff;
+  border: 1px solid #e3d9c9;
+  border-radius: 14px;
+  display: flex;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 20px;
+}
+.approval-card h2 { font-size: 1.1rem; margin-bottom: 6px; }
+.approval-card p { color: #647176; margin-bottom: 8px; }
+.approval-card span { color: #c3553e; font-size: .85rem; font-weight: 700; }
+.approval-actions { display: flex; gap: 10px; }
+.approval-actions button {
+  background: #1d2d34;
+  border: 0;
+  border-radius: 999px;
+  color: #fff;
+  cursor: pointer;
+  padding: 10px 16px;
+}
+.approval-actions button:last-child { background: #a6392d; }
 .section-heading { align-items: end; display: flex; justify-content: space-between; margin-bottom: 28px; }
 h2 { font: 700 2rem 'Comfortaa', sans-serif; margin-bottom: 0; }
 .result-count { color: #8a9698; font-size: .8rem; }
@@ -505,6 +530,8 @@ h2 { font: 700 2rem 'Comfortaa', sans-serif; margin-bottom: 0; }
   .topbar { align-items: flex-start; flex-direction: column; gap: 12px; }
   .hero { margin-top: 36px; }
   .results { padding-left: 20px; padding-right: 20px; }
+  .admin-panel { padding-left: 20px; padding-right: 20px; }
+  .approval-card { align-items: flex-start; flex-direction: column; }
   .section-heading { align-items: start; flex-direction: column; gap: 12px; }
   .tutor-card { grid-template-columns: 1fr; }
   .login-page { padding: 20px; }
