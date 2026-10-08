@@ -2,7 +2,7 @@ const express = require("express");
 const cors = require("cors");
 const crypto = require("crypto");
 const path = require("path");
-require("dotenv").config();
+require("dotenv").config({ path: path.join(__dirname, "../.env") });
 const { pool } = require("./db");
 const {
   SESSION_MAX_AGE_SECONDS,
@@ -13,6 +13,19 @@ const {
   requireRoles,
   sessionCookie,
 } = require("./auth");
+const {
+  acquireMicrosoftIdentity,
+  authTransactionCookie,
+  clearAuthTransactionCookie,
+  clearRegistrationCookie,
+  createAuthorizationUrl,
+  getMicrosoftConfiguration,
+  hashesMatch,
+  parseAuthTransaction,
+  randomToken,
+  readRegistrationToken,
+  registrationCookie,
+} = require("./microsoft-auth");
 
 const app = express();
 const requireAuthentication = createRequireAuthentication(pool);
@@ -31,6 +44,7 @@ function hashPassword(password, salt = crypto.randomBytes(16).toString("hex")) {
 }
 
 function verifyPassword(password, storedHash) {
+  if (typeof storedHash !== "string") return false;
   const [salt, hash] = storedHash.split(":");
   if (!salt || !/^[a-f\d]{128}$/i.test(hash || "")) return false;
 
@@ -66,8 +80,9 @@ const prepareDatabase = async () => {
   }
 
   const requiredColumnsByTable = {
-    users: ["id", "username", "login_identifier", "email", "password_hash", "role", "account_status", "approved_at"],
+    users: ["id", "username", "login_identifier", "email", "password_hash", "microsoft_object_id", "role", "account_status", "approved_at"],
     auth_sessions: ["id", "user_id", "token_hash", "expires_at"],
+    microsoft_registration_sessions: ["id", "token_hash", "email", "microsoft_object_id", "expires_at"],
     approval_events: ["id", "user_id", "reviewer_id", "decision", "created_at"],
     student_profiles: ["user_id", "student_number", "career_id", "campus_id"],
     tutor_profiles: ["user_id", "application_status", "is_available"],
@@ -108,6 +123,10 @@ app.get("/", async (req, res) => {
       "GET /api/health",
       "GET /api/catalogs",
       "POST /api/login",
+      "GET /api/auth/microsoft",
+      "GET /api/auth/microsoft/callback",
+      "GET /api/auth/microsoft/registration",
+      "POST /api/auth/microsoft/registration",
       "GET /api/session",
       "POST /api/logout",
       "POST /api/users",
@@ -125,6 +144,250 @@ app.get("/api/health", async (req, res, next) => {
     res.json({ message: "Backend funcionando", database: "mysql" });
   } catch (error) {
     next(error);
+  }
+});
+
+app.get("/api/auth/microsoft", async (req, res, next) => {
+  if (!getMicrosoftConfiguration()) {
+    return res.redirect(`${process.env.FRONTEND_ORIGIN || "http://localhost:5173"}/?institutional=unavailable`);
+  }
+  if (readSessionToken(req)) {
+    return res.redirect(`${process.env.FRONTEND_ORIGIN || "http://localhost:5173"}/?institutional=logout_first`);
+  }
+
+  const state = randomToken();
+  const nonce = randomToken();
+  const codeVerifier = randomToken();
+  try {
+    const authorizationUrl = await createAuthorizationUrl(state, nonce, codeVerifier);
+    res.setHeader("Set-Cookie", authTransactionCookie(state, nonce, codeVerifier));
+    res.redirect(authorizationUrl);
+  } catch (error) {
+    next(error);
+  }
+});
+
+app.get("/api/auth/microsoft/callback", async (req, res, next) => {
+  const frontendOrigin = process.env.FRONTEND_ORIGIN || "http://localhost:5173";
+  const transaction = parseAuthTransaction(req);
+  const callbackState = typeof req.query.state === "string" ? req.query.state : "";
+  const code = typeof req.query.code === "string" ? req.query.code : "";
+  const fail = (status) => {
+    res.setHeader("Set-Cookie", clearAuthTransactionCookie());
+    return res.redirect(`${frontendOrigin}/?institutional=${encodeURIComponent(status)}`);
+  };
+
+  if (!transaction || !callbackState || !hashesMatch(transaction.state, callbackState)) {
+    return fail("failed");
+  }
+  if (!code || req.query.error) {
+    return fail("failed");
+  }
+
+  let identity;
+  try {
+    identity = await acquireMicrosoftIdentity(code, transaction.nonce, transaction.codeVerifier);
+  } catch (error) {
+    console.error("Microsoft sign-in verification failed:", error.message);
+    return fail("failed");
+  }
+
+  try {
+    await requireDatabase();
+    const [users] = await pool.query(
+      `SELECT u.id, u.username, u.email, u.role, u.account_status,
+              u.microsoft_object_id, sp.user_id AS student_profile_id
+       FROM users u
+       LEFT JOIN student_profiles sp ON sp.user_id = u.id
+       WHERE u.email = ? OR u.microsoft_object_id = ?
+       LIMIT 2`,
+      [identity.email, identity.objectId],
+    );
+
+    if (users.length > 1) return fail("conflict");
+    const user = users[0];
+    if (user) {
+      if (user.role !== "alumno" || !user.student_profile_id ||
+          (user.microsoft_object_id && user.microsoft_object_id !== identity.objectId)) {
+        return fail("conflict");
+      }
+
+      if (!user.microsoft_object_id) {
+        const [linkResult] = await pool.query(
+          "UPDATE users SET microsoft_object_id = ? WHERE id = ? AND microsoft_object_id IS NULL",
+          [identity.objectId, user.id],
+        );
+        if (linkResult.affectedRows !== 1) return fail("conflict");
+      }
+      if (user.account_status !== "approved") {
+        return fail(user.account_status === "pending" ? "pending" : "disabled");
+      }
+
+      const token = randomToken();
+      const expiresAt = new Date(Date.now() + SESSION_MAX_AGE_SECONDS * 1000);
+      await pool.query(
+        "INSERT INTO auth_sessions (user_id, token_hash, expires_at) VALUES (?, ?, ?)",
+        [user.id, hashSessionToken(token), expiresAt],
+      );
+      res.setHeader("Set-Cookie", [
+        clearAuthTransactionCookie(),
+        sessionCookie(token),
+      ]);
+      return res.redirect(frontendOrigin);
+    }
+
+    const registrationToken = randomToken();
+    await pool.query("DELETE FROM microsoft_registration_sessions WHERE expires_at <= NOW()");
+    await pool.query(
+      "DELETE FROM microsoft_registration_sessions WHERE microsoft_object_id = ?",
+      [identity.objectId],
+    );
+    await pool.query(
+      `INSERT INTO microsoft_registration_sessions
+        (token_hash, email, microsoft_object_id, expires_at)
+       VALUES (?, ?, ?, ?)`,
+      [
+        hashSessionToken(registrationToken),
+        identity.email,
+        identity.objectId,
+        new Date(Date.now() + 15 * 60 * 1000),
+      ],
+    );
+    res.setHeader("Set-Cookie", [
+      clearAuthTransactionCookie(),
+      registrationCookie(registrationToken),
+    ]);
+    return res.redirect(`${frontendOrigin}/?institutional=register`);
+  } catch (error) {
+    return next(error);
+  }
+});
+
+app.get("/api/auth/microsoft/registration", async (req, res, next) => {
+  const token = readRegistrationToken(req);
+  if (!token) return res.status(401).json({ error: "La verificación institucional expiró; inicia sesión nuevamente" });
+
+  try {
+    await requireDatabase();
+    const [rows] = await pool.query(
+      `SELECT email FROM microsoft_registration_sessions
+       WHERE token_hash = ? AND expires_at > NOW()
+       LIMIT 1`,
+      [hashSessionToken(token)],
+    );
+    if (rows.length === 0) {
+      return res.status(401).json({ error: "La verificación institucional expiró; inicia sesión nuevamente" });
+    }
+    return res.json({ email: rows[0].email });
+  } catch (error) {
+    return next(error);
+  }
+});
+
+app.post("/api/auth/microsoft/registration", async (req, res, next) => {
+  const token = readRegistrationToken(req);
+  if (!token) return res.status(401).json({ error: "La verificación institucional expiró; inicia sesión nuevamente" });
+
+  const body = req.body && typeof req.body === "object" ? req.body : {};
+  const username = typeof body.username === "string" ? body.username.trim() : "";
+  const firstName = typeof body.firstName === "string" ? body.firstName.trim() : "";
+  const lastName = typeof body.lastName === "string" ? body.lastName.trim() : "";
+  const studentNumber = typeof body.studentNumber === "string" ? body.studentNumber : "";
+  const phone = typeof body.phone === "string" ? body.phone : "";
+  const careerId = Number(body.careerId);
+  const campusId = Number(body.campusId);
+  const validName = (value, maxLength) => value.length > 0 &&
+    value.length <= maxLength && /^\p{L}+$/u.test(value);
+
+  if (username.length < 3 || username.length > 80 || !/^\p{L}+$/u.test(username) ||
+      !validName(firstName, 80) || !validName(lastName, 120)) {
+    return res.status(400).json({ error: "Usuario, nombre o apellido tienen un formato inválido" });
+  }
+  if (!/^\d{11}$/.test(studentNumber) || !/^\d{11}$/.test(phone)) {
+    return res.status(400).json({ error: "La matrícula y el teléfono deben tener exactamente 11 dígitos" });
+  }
+  if (!Number.isSafeInteger(careerId) || careerId < 1 ||
+      !Number.isSafeInteger(campusId) || campusId < 1) {
+    return res.status(400).json({ error: "Selecciona una carrera y un campus válidos" });
+  }
+
+  let connection;
+  let transactionStarted = false;
+  try {
+    await requireDatabase();
+    connection = await pool.getConnection();
+    await connection.beginTransaction();
+    transactionStarted = true;
+
+    const [sessions] = await connection.query(
+      `SELECT email, microsoft_object_id FROM microsoft_registration_sessions
+       WHERE token_hash = ? AND expires_at > NOW()
+       FOR UPDATE`,
+      [hashSessionToken(token)],
+    );
+    const registration = sessions[0];
+    if (!registration) {
+      await connection.rollback();
+      transactionStarted = false;
+      return res.status(401).json({ error: "La verificación institucional expiró; inicia sesión nuevamente" });
+    }
+
+    const [careers] = await connection.query(
+      "SELECT id FROM careers WHERE id = ? AND is_active = TRUE",
+      [careerId],
+    );
+    const [campuses] = await connection.query(
+      "SELECT id FROM campuses WHERE id = ? AND is_active = TRUE",
+      [campusId],
+    );
+    if (careers.length === 0 || campuses.length === 0) {
+      await connection.rollback();
+      transactionStarted = false;
+      return res.status(400).json({ error: "La carrera o campus seleccionado no está activo en el catálogo" });
+    }
+
+    const [existingUsers] = await connection.query(
+      "SELECT id FROM users WHERE email = ? OR microsoft_object_id = ? LIMIT 1",
+      [registration.email, registration.microsoft_object_id],
+    );
+    if (existingUsers.length > 0) {
+      await connection.rollback();
+      transactionStarted = false;
+      return res.status(409).json({ error: "Esta cuenta institucional ya está vinculada a un perfil" });
+    }
+
+    const [userResult] = await connection.query(
+      `INSERT INTO users
+        (username, login_identifier, email, password_hash, microsoft_object_id, role, account_status)
+       VALUES (?, ?, ?, NULL, ?, 'alumno', 'pending')`,
+      [username, studentNumber, registration.email, registration.microsoft_object_id],
+    );
+    await connection.query(
+      `INSERT INTO student_profiles
+        (user_id, first_name, last_name, student_number, student_number_verification_status,
+         career_id, campus_id, phone)
+       VALUES (?, ?, ?, ?, 'pending', ?, ?, ?)`,
+      [userResult.insertId, firstName, lastName, studentNumber, careerId, campusId, phone],
+    );
+    await connection.query(
+      "DELETE FROM microsoft_registration_sessions WHERE id = ?",
+      [sessions[0].id],
+    );
+    await connection.commit();
+    transactionStarted = false;
+    res.setHeader("Set-Cookie", clearRegistrationCookie());
+    return res.status(201).json({ role: "alumno", accountStatus: "pending" });
+  } catch (error) {
+    if (connection && transactionStarted) {
+      await connection.rollback();
+      transactionStarted = false;
+    }
+    if (error.code === "ER_DUP_ENTRY") {
+      return res.status(409).json({ error: "La matrícula, el usuario o el correo ya están registrados" });
+    }
+    return next(error);
+  } finally {
+    if (connection) connection.release();
   }
 });
 

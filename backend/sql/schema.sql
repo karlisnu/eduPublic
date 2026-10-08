@@ -6,7 +6,8 @@ CREATE TABLE IF NOT EXISTS users (
   username VARCHAR(80) NOT NULL,
   login_identifier CHAR(11) NULL,
   email VARCHAR(255) NOT NULL,
-  password_hash VARCHAR(255) NOT NULL,
+  password_hash VARCHAR(255) NULL,
+  microsoft_object_id VARCHAR(36) NULL,
   role ENUM('admin', 'alumno', 'tutor') NOT NULL,
   account_status ENUM('pending', 'approved', 'rejected', 'suspended') NOT NULL DEFAULT 'pending',
   approved_at DATETIME NULL,
@@ -16,6 +17,7 @@ CREATE TABLE IF NOT EXISTS users (
   UNIQUE KEY uq_users_username (username),
   UNIQUE KEY uq_users_login_identifier (login_identifier),
   UNIQUE KEY uq_users_email (email),
+  UNIQUE KEY uq_users_microsoft_object_id (microsoft_object_id),
   INDEX idx_users_role_status (role, account_status),
   CONSTRAINT chk_users_username_letters
     CHECK (REGEXP_LIKE(username, '^[[:alpha:]]+$')),
@@ -38,6 +40,19 @@ CREATE TABLE IF NOT EXISTS auth_sessions (
   INDEX idx_auth_sessions_user_expiry (user_id, expires_at),
   CONSTRAINT fk_auth_sessions_user
     FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS microsoft_registration_sessions (
+  id BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  token_hash CHAR(64) NOT NULL,
+  email VARCHAR(255) NOT NULL,
+  microsoft_object_id VARCHAR(36) NOT NULL,
+  expires_at DATETIME NOT NULL,
+  created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  UNIQUE KEY uq_microsoft_registration_token_hash (token_hash),
+  UNIQUE KEY uq_microsoft_registration_object_id (microsoft_object_id),
+  INDEX idx_microsoft_registration_expiry (expires_at)
 );
 
 CREATE TABLE IF NOT EXISTS careers (

@@ -32,6 +32,59 @@ function App() {
   const [approvals, setApprovals] = useState([]);
   const [approvalsLoading, setApprovalsLoading] = useState(false);
   const [approvalsError, setApprovalsError] = useState("");
+  const [institutionalRegistration, setInstitutionalRegistration] = useState(false);
+  const [institutionalRegistrationLoading, setInstitutionalRegistrationLoading] = useState(false);
+  const [institutionalRegistrationError, setInstitutionalRegistrationError] = useState("");
+  const [institutionalRegistrationEmail, setInstitutionalRegistrationEmail] = useState("");
+  const [institutionalRegistrationComplete, setInstitutionalRegistrationComplete] = useState(false);
+  const [institutionalCatalogs, setInstitutionalCatalogs] = useState({ careers: [], campuses: [] });
+  const [institutionalProfile, setInstitutionalProfile] = useState({
+    username: "",
+    firstName: "",
+    lastName: "",
+    studentNumber: "",
+    careerId: "",
+    campusId: "",
+    phone: "",
+  });
+
+  useEffect(() => {
+    const status = new URLSearchParams(window.location.search).get("institutional");
+    if (status === "register") {
+      setInstitutionalRegistration(true);
+      setInstitutionalRegistrationLoading(true);
+      Promise.all([
+        fetch(`${API_URL}/api/auth/microsoft/registration`, { credentials: "include" }),
+        fetch(`${API_URL}/api/catalogs`),
+      ])
+        .then(async ([registrationResponse, catalogsResponse]) => {
+          const registration = await readApiResponse(registrationResponse);
+          const catalogs = await readApiResponse(catalogsResponse);
+          if (!registrationResponse.ok) {
+            throw new Error(registration.error || "La verificación institucional expiró; inicia sesión nuevamente.");
+          }
+          if (!catalogsResponse.ok) throw new Error(catalogs.error || "No se pudieron cargar las carreras y campus.");
+          setInstitutionalRegistrationEmail(registration.email);
+          setInstitutionalCatalogs(catalogs);
+        })
+        .catch((requestError) => setInstitutionalRegistrationError(requestError.message))
+        .finally(() => setInstitutionalRegistrationLoading(false));
+      return;
+    }
+
+    const statusMessages = {
+      unavailable: "El inicio con cuenta institucional no está configurado todavía.",
+      failed: "No se pudo completar el inicio de sesión institucional. Inténtalo de nuevo.",
+      conflict: "La cuenta institucional no coincide con un perfil elegible de estudiante.",
+      pending: "Tu cuenta está pendiente de aprobación. Recibirás acceso cuando un administrador la apruebe.",
+      disabled: "La cuenta no está habilitada para iniciar sesión.",
+      logout_first: "Cierra la sesión actual antes de iniciar con otra cuenta institucional.",
+    };
+    if (statusMessages[status]) {
+      setAuthError(statusMessages[status]);
+      setShowLogin(true);
+    }
+  }, []);
 
   useEffect(() => {
     fetch(`${API_URL}/api/session`, { credentials: "include" })
@@ -144,6 +197,25 @@ function App() {
     }
   };
 
+  const handleInstitutionalRegistration = async (event) => {
+    event.preventDefault();
+    setInstitutionalRegistrationError("");
+    try {
+      const response = await fetch(`${API_URL}/api/auth/microsoft/registration`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(institutionalProfile),
+      });
+      const data = await readApiResponse(response);
+      if (!response.ok) throw new Error(data.error || "No se pudo completar el registro");
+      setInstitutionalRegistrationComplete(true);
+      window.history.replaceState({}, "", window.location.pathname);
+    } catch (requestError) {
+      setInstitutionalRegistrationError(requestError.message);
+    }
+  };
+
   const handleLogout = async () => {
     setAuthError("");
     try {
@@ -189,6 +261,187 @@ function App() {
 
   if (authLoading) {
     return <main className="login-page"><p className="message">Verificando sesión...</p></main>;
+  }
+
+  if (!user && institutionalRegistration) {
+    return (
+      <main className="login-page">
+        <section className="institutional-registration">
+          {institutionalRegistrationComplete ? (
+            <>
+              <p className="eyebrow">Registro enviado</p>
+              <h1>Tu cuenta está pendiente de aprobación.</h1>
+              <p className="message">
+                La verificación del correo institucional no valida automáticamente la matrícula.
+                Un administrador revisará tu solicitud antes de habilitar el acceso.
+              </p>
+              <button
+                type="button"
+                className="btn-main-login"
+                onClick={() => {
+                  setInstitutionalRegistration(false);
+                  setShowLogin(true);
+                }}
+              >
+                VOLVER AL INICIO DE SESIÓN
+              </button>
+            </>
+          ) : (
+            <>
+              <p className="eyebrow">Cuenta institucional verificada</p>
+              <h1>Completa tu registro de estudiante</h1>
+              <p className="message">Correo: <strong>{institutionalRegistrationEmail || "Cargando..."}</strong></p>
+              {institutionalRegistrationError ? (
+                <>
+                  <p className="login-error">{institutionalRegistrationError}</p>
+                  <button
+                    type="button"
+                    className="btn-main-login"
+                    onClick={() => window.location.assign("/")}
+                  >
+                    VOLVER AL INICIO
+                  </button>
+                </>
+              ) : institutionalRegistrationLoading ? (
+                <p className="message">Cargando los catálogos institucionales...</p>
+              ) : (
+                <form onSubmit={handleInstitutionalRegistration}>
+                  {(institutionalCatalogs.careers.length === 0 ||
+                    institutionalCatalogs.campuses.length === 0) && (
+                    <p className="login-error">
+                      El catálogo oficial de carreras o campus no está disponible. Contacta a un administrador antes de continuar.
+                    </p>
+                  )}
+                  <div className="input-group">
+                    <label htmlFor="institutional-username">Usuario</label>
+                    <input
+                      id="institutional-username"
+                      className="dark-input"
+                      value={institutionalProfile.username}
+                      onChange={(event) => setInstitutionalProfile({
+                        ...institutionalProfile,
+                        username: event.target.value,
+                      })}
+                      pattern="\p{L}+"
+                      minLength={3}
+                      maxLength={80}
+                      required
+                    />
+                  </div>
+                  <div className="input-group">
+                    <label htmlFor="institutional-first-name">Nombre</label>
+                    <input
+                      id="institutional-first-name"
+                      className="dark-input"
+                      value={institutionalProfile.firstName}
+                      onChange={(event) => setInstitutionalProfile({
+                        ...institutionalProfile,
+                        firstName: event.target.value,
+                      })}
+                      pattern="\p{L}+"
+                      maxLength={80}
+                      required
+                    />
+                  </div>
+                  <div className="input-group">
+                    <label htmlFor="institutional-last-name">Apellido</label>
+                    <input
+                      id="institutional-last-name"
+                      className="dark-input"
+                      value={institutionalProfile.lastName}
+                      onChange={(event) => setInstitutionalProfile({
+                        ...institutionalProfile,
+                        lastName: event.target.value,
+                      })}
+                      pattern="\p{L}+"
+                      maxLength={120}
+                      required
+                    />
+                  </div>
+                  <div className="input-group">
+                    <label htmlFor="institutional-student-number">Matrícula (11 dígitos)</label>
+                    <input
+                      id="institutional-student-number"
+                      className="dark-input"
+                      inputMode="numeric"
+                      pattern="[0-9]{11}"
+                      maxLength={11}
+                      value={institutionalProfile.studentNumber}
+                      onChange={(event) => setInstitutionalProfile({
+                        ...institutionalProfile,
+                        studentNumber: event.target.value,
+                      })}
+                      required
+                    />
+                  </div>
+                  <div className="input-group">
+                    <label htmlFor="institutional-career">Carrera</label>
+                    <select
+                      id="institutional-career"
+                      className="dark-input"
+                      value={institutionalProfile.careerId}
+                      onChange={(event) => setInstitutionalProfile({
+                        ...institutionalProfile,
+                        careerId: event.target.value,
+                      })}
+                      required
+                    >
+                      <option value="">Selecciona tu carrera</option>
+                      {institutionalCatalogs.careers.map((career) => (
+                        <option key={career.id} value={career.id}>{career.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="input-group">
+                    <label htmlFor="institutional-campus">Campus</label>
+                    <select
+                      id="institutional-campus"
+                      className="dark-input"
+                      value={institutionalProfile.campusId}
+                      onChange={(event) => setInstitutionalProfile({
+                        ...institutionalProfile,
+                        campusId: event.target.value,
+                      })}
+                      required
+                    >
+                      <option value="">Selecciona tu campus</option>
+                      {institutionalCatalogs.campuses.map((campus) => (
+                        <option key={campus.id} value={campus.id}>{campus.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="input-group">
+                    <label htmlFor="institutional-phone">Teléfono (11 dígitos)</label>
+                    <input
+                      id="institutional-phone"
+                      className="dark-input"
+                      inputMode="numeric"
+                      pattern="[0-9]{11}"
+                      maxLength={11}
+                      value={institutionalProfile.phone}
+                      onChange={(event) => setInstitutionalProfile({
+                        ...institutionalProfile,
+                        phone: event.target.value,
+                      })}
+                      required
+                    />
+                  </div>
+                  {institutionalRegistrationError &&
+                    <p className="login-error">{institutionalRegistrationError}</p>}
+                  <button
+                    type="submit"
+                    className="btn-main-login"
+                    disabled={!institutionalCatalogs.careers.length || !institutionalCatalogs.campuses.length}
+                  >
+                    ENVIAR SOLICITUD
+                  </button>
+                </form>
+              )}
+            </>
+          )}
+        </section>
+      </main>
+    );
   }
 
   if (!user && !showLogin) {
@@ -292,6 +545,11 @@ function App() {
                     LOG IN
                   </button>
                 </form>
+                {selectedRole === "alumno" && (
+                  <a className="microsoft-login-button" href={`${API_URL}/api/auth/microsoft`}>
+                    Continuar con cuenta institucional UES
+                  </a>
+                )}
               </div>
 
               <div className="footer-login">

@@ -43,6 +43,10 @@ The backend currently exposes:
   `POST /api/users`.
 - `POST /api/login`, `GET /api/session`, and `POST /api/logout` for
   authentication with server-side MySQL sessions and an `HttpOnly` cookie.
+- `GET /api/auth/microsoft` and its callback for single-tenant Universidad de
+  Sonora student sign-in through Microsoft Entra ID. Existing student accounts
+  link by institutional email and retain their approval requirement; new
+  students complete required profile fields before a pending account is saved.
 - Tutor search and detail endpoints, restricted to authenticated students.
 - Pending-approval listing and approval decisions, restricted to authenticated
   administrators and recorded in `approval_events`.
@@ -55,6 +59,11 @@ is not an authorization boundary. Passwords are stored only as hashes in
 committed to the repository. All database operations must use parameterized
 queries. Student-number approval remains a separate manual verification process;
 approving an account does not mark its enrollment number as verified.
+
+Microsoft student sign-in uses the registered university tenant, validates the
+tenant, immutable object ID, nonce, and `@ues.mx` sign-in name, and uses a
+short-lived, hashed registration handoff before creating a pending student
+profile. The client secret belongs only in backend environment configuration.
 
 ## Local services
 

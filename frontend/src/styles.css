@@ -199,6 +199,41 @@ form { display: flex; flex-direction: column; gap: 18px; }
   padding: 1rem 1.2rem;
   text-transform: uppercase;
 }
+.microsoft-login-button {
+  background: #fff;
+  border: 1px solid #8a9498;
+  border-radius: 12px;
+  color: #1d2d34;
+  display: block;
+  font-weight: 700;
+  margin-top: 16px;
+  padding: 1rem 1.2rem;
+  text-align: center;
+  text-decoration: none;
+}
+.microsoft-login-button:hover,
+.microsoft-login-button:focus-visible {
+  background: #f4f6f7;
+}
+.institutional-registration {
+  background: #fffaf4;
+  border-radius: 24px;
+  box-shadow: 0 20px 60px rgba(29, 45, 52, 0.12);
+  max-width: 620px;
+  padding: clamp(24px, 5vw, 48px);
+  width: 100%;
+}
+.institutional-registration h1 {
+  color: #1d2d34;
+  font: 700 clamp(1.8rem, 4vw, 2.5rem) 'Comfortaa', sans-serif;
+  margin: 0 0 20px;
+}
+.institutional-registration .message {
+  line-height: 1.6;
+}
+.institutional-registration select.dark-input {
+  min-height: 48px;
+}
 .footer-login {
   align-items: center;
   border-top: 1px solid rgba(29, 45, 52, 0.1);
