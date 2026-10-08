@@ -37,17 +37,38 @@ There is intentionally no `messages`, `conversations`, or chat table in EduMatch
 
 ## Current integration boundary
 
-The backend currently exposes the initial read-only endpoints:
+The backend currently exposes:
 
-- `GET /api/tutors` returns the available tutors.
-- `GET /api/tutors/:id` returns one tutor or `404` when it does not exist.
+- Public registration catalogs and registration: `GET /api/catalogs` and
+  `POST /api/users`.
+- `POST /api/login`, `GET /api/session`, and `POST /api/logout` for
+  authentication with server-side MySQL sessions and an `HttpOnly` cookie.
+- `GET /api/auth/microsoft` and its callback for single-tenant Universidad de
+  Sonora student sign-in through Microsoft Entra ID. Existing student accounts
+  link by institutional email and retain their approval requirement; new
+  students complete required profile fields before a pending account is saved.
+- Tutor search and detail endpoints, restricted to authenticated students.
+- Pending-approval listing and approval decisions, restricted to authenticated
+  administrators and recorded in `approval_events`.
 
-Authentication, registration, approvals, and persistence are backed by MySQL as the remaining role-specific endpoints are integrated. Passwords are stored only as hashes in `users.password_hash`; credentials must never be stored in frontend JavaScript or committed to the repository. All database operations must use parameterized queries.
+Session tokens are random values stored only as SHA-256 hashes in
+`auth_sessions`, and expire after seven days. Server middleware checks the live
+account status and role on every protected request; the frontend's stored state
+is not an authorization boundary. Passwords are stored only as hashes in
+`users.password_hash`; credentials must never be stored in frontend JavaScript or
+committed to the repository. All database operations must use parameterized
+queries. Student-number approval remains a separate manual verification process;
+approving an account does not mark its enrollment number as verified.
+
+Microsoft student sign-in uses the registered university tenant, validates the
+tenant, immutable object ID, nonce, and `@ues.mx` sign-in name, and uses a
+short-lived, hashed registration handoff before creating a pending student
+profile. The client secret belongs only in backend environment configuration.
 
 ## Local services
 
 ```text
 Browser :5173 -> Vite React frontend
-Backend :8000  -> future API service
+Backend :8000  -> Express API
 Backend -> db:3306/appdb -> MySQL
 ```

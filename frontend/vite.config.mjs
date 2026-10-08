@@ -8,6 +8,7 @@ export default defineConfig({
     fs: {
       allow: [".."],
     },
+    allowedHosts: process.env.VITE_ALLOWED_HOST ? [process.env.VITE_ALLOWED_HOST] : [],
     proxy: {
       "/api": "http://localhost:8000",
     },

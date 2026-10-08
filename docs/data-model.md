@@ -20,11 +20,11 @@ erDiagram
     CAREERS ||--o{ STUDENT_PROFILES : selected_for
     CAMPUSES ||--o{ STUDENT_PROFILES : selected_for
     TUTOR_PROFILES }o--o{ SUBJECTS : teaches
-    TUTOR_PROFILES ||--o{ TUTOR_STUDENT_CONNECTIONS : manages
-    STUDENT_PROFILES ||--o{ TUTOR_STUDENT_CONNECTIONS : requests
-    TUTOR_STUDENT_CONNECTIONS ||--o{ TUTOR_RATINGS : receives
-    TUTOR_STUDENT_CONNECTIONS ||--o{ STUDENT_EVALUATIONS : contains
-    TUTOR_STUDENT_CONNECTIONS ||--o{ ACADEMIC_FILES : authorizes
+    TUTOR_PROFILES ||--o{ CONNECTIONS : manages
+    STUDENT_PROFILES ||--o{ CONNECTIONS : requests
+    CONNECTIONS ||--o{ TUTOR_RATINGS : receives
+    CONNECTIONS ||--o{ STUDENT_EVALUATIONS : contains
+    CONNECTIONS ||--o{ ACADEMIC_FILES : authorizes
     TUTOR_PROFILES ||--o{ TUTOR_RATINGS : receives
     STUDENT_PROFILES ||--o{ TUTOR_RATINGS : writes
     TUTOR_PROFILES ||--o{ STUDENT_EVALUATIONS : writes
@@ -72,8 +72,8 @@ erDiagram
         int user_id PK, FK
         string first_name
         string last_name
-        string bio max 100
-        string experience max 100
+        string bio "max 100 characters"
+        string experience "max 100 characters"
         boolean is_available
         enum application_status
     }
@@ -81,10 +81,10 @@ erDiagram
     SUBJECTS {
         int id PK
         string name UK
-        text description max 100 words
+        text description "max 100 words"
     }
 
-    TUTOR_STUDENT_CONNECTIONS {
+    CONNECTIONS {
         int id PK
         int tutor_id FK
         int student_id FK
@@ -101,7 +101,7 @@ erDiagram
         int student_id FK
         int tutor_id FK
         int rating
-        string review max 50 characters
+        string review "max 50 characters"
         timestamp created_at
     }
 
@@ -111,7 +111,7 @@ erDiagram
         int tutor_id FK
         int student_id FK
         decimal score
-        string comments max 50 characters
+        string comments "max 50 characters"
         timestamp evaluated_at
     }
 
