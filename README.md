@@ -109,6 +109,12 @@ Administrative approval endpoints require an authenticated administrator:
 `GET /api/admin/approvals/pending` and
 `PATCH /api/admin/users/:id/approval` with `{"decision":"approved"}` or
 `{"decision":"rejected"}`. Approval decisions are recorded in `approval_events`.
+Interactive API documentation is available at `http://localhost:8000/api-docs`
+after starting the backend. The OpenAPI document is served at
+`http://localhost:8000/api-docs.json`. In Swagger UI, use `POST /api/login` with
+an approved local account before trying protected endpoints; the browser retains
+the resulting HttpOnly session cookie for subsequent requests. Swagger UI assets
+are loaded from jsDelivr, so the docs page needs internet access.
 Set `FRONTEND_ORIGIN` when the browser frontend is hosted at a different origin
 within the same site;
 production deployments must use HTTPS so the session cookie is marked `Secure`.
@@ -146,6 +152,7 @@ MySQL instance. Keep `.env` local and do not commit credentials.
 
 The project architecture and planned API boundary are documented in [`docs/architecture.md`](docs/architecture.md). Pull requests are validated by [`.github/workflows/ci.yml`](.github/workflows/ci.yml).
 The complete Week 1 verification procedure is documented in [`docs/week1-verification.md`](docs/week1-verification.md).
+The local startup, database migration, health-check, and troubleshooting procedures are documented in [`docs/runbook.md`](docs/runbook.md).
 
 ## Project Proposal
 

@@ -49,7 +49,9 @@ function App() {
   });
 
   useEffect(() => {
-    const status = new URLSearchParams(window.location.search).get("institutional");
+    const query = new URLSearchParams(window.location.search);
+    const status = query.get("institutional");
+    const exchangeReason = query.get("reason");
     if (status === "register") {
       setInstitutionalRegistration(true);
       setInstitutionalRegistrationLoading(true);
@@ -80,7 +82,16 @@ function App() {
       disabled: "La cuenta no está habilitada para iniciar sesión.",
       logout_first: "Cierra la sesión actual antes de iniciar con otra cuenta institucional.",
     };
-    if (statusMessages[status]) {
+    const exchangeMessages = {
+      invalid_client: "Microsoft rechazó las credenciales de la aplicación. Verifica el Client ID y que el Client Secret sea el valor vigente, no su identificador.",
+      invalid_grant: "Microsoft rechazó el código de acceso. Inicia un intento nuevo y confirma que la URI de redirección y PKCE coincidan.",
+      unauthorized_client: "Microsoft no autorizó esta aplicación para ese flujo. Revisa el registro, tipo de cuenta y permisos en Entra.",
+    };
+    if (status === "exchange_failed") {
+      setAuthError(exchangeMessages[exchangeReason] ||
+        "Microsoft rechazó el intercambio del código. Consulta la terminal del backend para ver el código AADSTS.");
+      setShowLogin(true);
+    } else if (statusMessages[status]) {
       setAuthError(statusMessages[status]);
       setShowLogin(true);
     }
