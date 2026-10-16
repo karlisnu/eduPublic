@@ -47,6 +47,7 @@ CREATE TABLE IF NOT EXISTS microsoft_registration_sessions (
   token_hash CHAR(64) NOT NULL,
   email VARCHAR(255) NOT NULL,
   microsoft_object_id VARCHAR(36) NOT NULL,
+  role ENUM('alumno', 'tutor') NOT NULL,
   expires_at DATETIME NOT NULL,
   created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (id),
@@ -111,14 +112,23 @@ CREATE TABLE IF NOT EXISTS tutor_profiles (
   last_name VARCHAR(120) NOT NULL,
   bio VARCHAR(100) NULL,
   experience VARCHAR(100) NOT NULL,
+  career_id INT UNSIGNED NULL,
+  current_semester SMALLINT UNSIGNED NULL,
+  average DECIMAL(5,2) NULL,
   is_available BOOLEAN NOT NULL DEFAULT TRUE,
   application_status ENUM('pending', 'approved', 'rejected') NOT NULL DEFAULT 'pending',
   PRIMARY KEY (user_id),
   INDEX idx_tutor_profiles_available (application_status, is_available),
+  CONSTRAINT fk_tutor_profiles_career
+    FOREIGN KEY (career_id) REFERENCES careers (id) ON DELETE RESTRICT,
   CONSTRAINT chk_tutor_profiles_first_name
     CHECK (REGEXP_LIKE(first_name, '^[[:alpha:]]+$')),
   CONSTRAINT chk_tutor_profiles_last_name
     CHECK (REGEXP_LIKE(last_name, '^[[:alpha:]]+$')),
+  CONSTRAINT chk_tutor_profiles_current_semester
+    CHECK (current_semester IS NULL OR current_semester > 0),
+  CONSTRAINT chk_tutor_profiles_average
+    CHECK (average IS NULL OR average BETWEEN 0 AND 100),
   CONSTRAINT fk_tutor_profiles_user
     FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE CASCADE
 );
@@ -136,6 +146,20 @@ CREATE TABLE IF NOT EXISTS subjects (
       OR CHAR_LENGTH(REGEXP_REPLACE(TRIM(description), '[[:space:]]+', ' '))
          - CHAR_LENGTH(REPLACE(REGEXP_REPLACE(TRIM(description), '[[:space:]]+', ' '), ' ', '')) < 100
     )
+);
+
+CREATE TABLE IF NOT EXISTS career_subjects (
+  career_id INT UNSIGNED NOT NULL,
+  subject_id INT UNSIGNED NOT NULL,
+  semester_number SMALLINT UNSIGNED NOT NULL,
+  PRIMARY KEY (career_id, subject_id),
+  INDEX idx_career_subjects_semester (career_id, semester_number),
+  CONSTRAINT fk_career_subjects_career
+    FOREIGN KEY (career_id) REFERENCES careers (id) ON DELETE CASCADE,
+  CONSTRAINT fk_career_subjects_subject
+    FOREIGN KEY (subject_id) REFERENCES subjects (id) ON DELETE CASCADE,
+  CONSTRAINT chk_career_subjects_semester
+    CHECK (semester_number > 0)
 );
 
 CREATE TABLE IF NOT EXISTS tutor_subjects (

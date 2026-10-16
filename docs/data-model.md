@@ -19,6 +19,9 @@ erDiagram
     USERS ||--o{ APPROVAL_EVENTS : reviews
     CAREERS ||--o{ STUDENT_PROFILES : selected_for
     CAMPUSES ||--o{ STUDENT_PROFILES : selected_for
+    CAREERS ||--o{ TUTOR_PROFILES : studies
+    CAREERS ||--o{ CAREER_SUBJECTS : defines
+    SUBJECTS ||--o{ CAREER_SUBJECTS : scheduled_as
     TUTOR_PROFILES }o--o{ SUBJECTS : teaches
     TUTOR_PROFILES ||--o{ CONNECTIONS : manages
     STUDENT_PROFILES ||--o{ CONNECTIONS : requests
@@ -35,6 +38,7 @@ erDiagram
     USERS {
         int id PK
         string username UK
+        string login_identifier UK "11-digit student/tutor number"
         string email UK
         string password_hash
         enum role
@@ -74,6 +78,9 @@ erDiagram
         string last_name
         string bio "max 100 characters"
         string experience "max 100 characters"
+        int career_id FK
+        int current_semester
+        decimal average "0-100"
         boolean is_available
         enum application_status
     }
@@ -82,6 +89,12 @@ erDiagram
         int id PK
         string name UK
         text description "max 100 words"
+    }
+
+    CAREER_SUBJECTS {
+        int career_id PK, FK
+        int subject_id PK, FK
+        int semester_number
     }
 
     CONNECTIONS {
@@ -144,8 +157,9 @@ erDiagram
 | `users` | Authentication, role, account approval state, username, and email |
 | `careers`, `campuses` | Authoritative catalogs used by student profiles; only active entries are selectable |
 | `student_profiles` | Student-specific academic/contact information and enrollment verification state |
-| `tutor_profiles` | Tutor biography, experience, availability flag, and application state |
+| `tutor_profiles` | Tutor career, semester, reported average, biography, experience, availability, and application state |
 | `subjects` | Catalog of academic subjects; names are preserved and descriptions are limited to 100 words |
+| `career_subjects` | Official subject-to-semester mapping for each career |
 | `tutor_subjects` | Many-to-many relationship between tutors and subjects |
 | `tutor_student_connections` | Student-tutor requests and accepted relationships |
 | `tutor_ratings` | Student ratings assigned to tutors, from 1 to 5 |
@@ -162,13 +176,14 @@ erDiagram
 4. A student rating evaluates a tutor; it is not the same as a student evaluation.
 5. Ratings, evaluations, and files must be authorized against an existing
    student-tutor connection in the backend.
-6. Passwords are stored as hashes, never as plain text.
+6. EduMatch stores only password hashes for application-managed accounts such as administrators. Institutional credentials are validated by Microsoft and are never received or stored by EduMatch.
 7. The database has no message, conversation, or chat entity.
 8. Usernames and profile names contain letters only; emails must have a valid structure, contain no whitespace, and remain unique.
 9. Student numbers and phone numbers contain exactly 11 digits. Number uniqueness does not prove enrollment: verification must use an authoritative Universidad de Sonora source, and new numbers remain pending until that verification succeeds.
 10. Career and campus selections reference active catalog entries. Legacy catalog values are retained as inactive until checked against official university data; catalog imports must not invent official values.
-11. Tutor bio and experience are each limited to 100 characters. Tutor ratings and student evaluation comments are limited to 50 characters. Tutor ratings retain `created_at` but have no automatic update timestamp.
-12. Administrator accounts use `users.role = 'admin'`; there is no separate password-bearing administrator table or public administrator registration. Provision the initial administrator through a controlled process outside the public application. Only authenticated administrators may modify student/tutor data or create approval events, enforced by backend authorization.
+11. Tutor subject selections must be mapped to their career at or before the tutor's current semester in `career_subjects`. New tutor applications include a reported average from 0 to 100 and remain pending administrative review. Do not add guessed curriculum rows; tutor signup stays blocked until the official mapping is loaded.
+12. Tutor bio and experience are each limited to 100 characters. Tutor ratings and student evaluation comments are limited to 50 characters. Tutor ratings retain `created_at` but have no automatic update timestamp.
+13. Administrator accounts use `users.role = 'admin'`; there is no separate password-bearing administrator table or public administrator registration. Provision the initial administrator through a controlled process outside the public application. Only authenticated administrators may modify student/tutor data or create approval events, enforced by backend authorization.
 
 ## Why there are both Markdown and SQL files
 
@@ -177,6 +192,6 @@ erDiagram
 - [`backend/sql/schema.sql`](../backend/sql/schema.sql) creates the actual MySQL
   tables, indexes, foreign keys, and constraints.
 
-[`backend/sql/migrations/002_apply_profile_data_rules.sql`](../backend/sql/migrations/002_apply_profile_data_rules.sql) upgrades an existing database. The migration preserves legacy career/campus values as inactive catalog rows. Existing invalid student numbers, phone numbers, names, or overlength text must be reviewed and corrected before their new database constraints can be applied; never silently fabricate a verified enrollment number.
+[`backend/sql/migrations/002_apply_profile_data_rules.sql`](../backend/sql/migrations/002_apply_profile_data_rules.sql) upgrades an existing database. Migration 006 adds tutor academic eligibility and the `career_subjects` mapping; load that mapping only from official curriculum data. The migration preserves legacy career/campus values as inactive catalog rows. Existing invalid student numbers, phone numbers, names, or overlength text must be reviewed and corrected before their new database constraints can be applied; never silently fabricate a verified enrollment number.
 
 The documentation and SQL files should be updated together whenever the data model changes.

@@ -21,6 +21,8 @@ The complete MySQL model is defined in [`backend/sql/schema.sql`](../backend/sql
 
 - `users` stores credentials, one of the `admin`, `alumno`, or `tutor` roles, and the approval lifecycle. `student_profiles` and `tutor_profiles` store only fields belonging to that role.
 - `careers` and `campuses` are lookup catalogs referenced by student profiles. Only active values loaded from authoritative Universidad de Sonora data may be offered for selection. Student numbers must be 11 digits and stay unverified until an authoritative verification process confirms them.
+- `tutor_profiles` also records the tutor's career, current semester, and reported average (0-100). These fields remain pending administrative review; a numeric student number is not itself proof of enrollment.
+- `career_subjects` maps each subject to the semester in which it is taught for an active career. Populate it only from an authoritative curriculum. Tutor signup and tutor search only accept/display subjects mapped to that career at or before the tutor's current semester.
 - Names/usernames are letters only, emails are validated and unique, and student phone numbers contain 11 digits. Tutor bio/experience are capped at 100 characters; subject descriptions at 100 words; ratings and student-evaluation comments at 50 characters.
 - Administrators use the existing `users` account with role `admin`; there is no separate password-bearing admin table or public admin registration. Provision the initial admin outside the public application. The backend must authorize administrative profile changes and approval events.
 - `subjects` and `tutor_subjects` provide a normalized many-to-many relation so tutor search is scoped to subjects without duplicating subject names.
@@ -42,16 +44,18 @@ The backend currently exposes:
 - Interactive OpenAPI/Swagger UI at `GET /api-docs` and its machine-readable
   specification at `GET /api-docs.json`. The UI is served by the backend and
   documents the current API routes, request/response shapes, and session-cookie
-  authentication. Sign in through `POST /api/login` in the UI before trying
-  protected endpoints.
-- Public registration catalogs and registration: `GET /api/catalogs` and
-  `POST /api/users`.
-- `POST /api/login`, `GET /api/session`, and `POST /api/logout` for
-  authentication with server-side MySQL sessions and an `HttpOnly` cookie.
+  authentication. Use Microsoft SSO for student/tutor identities and
+  `POST /api/login` only for administrator access before trying protected endpoints.
+- Public registration catalogs at `GET /api/catalogs` and subject eligibility at
+  `GET /api/catalogs/tutor-subjects`.
+- `GET /api/session` and `POST /api/logout` for server-side MySQL sessions and an
+  `HttpOnly` cookie. Students and tutors authenticate through Microsoft SSO;
+  `POST /api/login` remains only for administrators.
 - `GET /api/auth/microsoft` and its callback for single-tenant Universidad de
-  Sonora student sign-in through Microsoft Entra ID. Existing student accounts
-  link by institutional email and retain their approval requirement; new
-  students complete required profile fields before a pending account is saved.
+  Sonora student/tutor sign-in through Microsoft Entra ID. Existing accounts
+  link by institutional email and retain their approval requirement. An unknown
+  student is not registered. An unknown tutor can submit an application after
+  identity verification; the account remains pending administrative approval.
 - Tutor search and detail endpoints, restricted to authenticated students.
 - Pending-approval listing and approval decisions, restricted to authenticated
   administrators and recorded in `approval_events`.
@@ -60,15 +64,19 @@ Session tokens are random values stored only as SHA-256 hashes in
 `auth_sessions`, and expire after seven days. Server middleware checks the live
 account status and role on every protected request; the frontend's stored state
 is not an authorization boundary. Passwords are stored only as hashes in
-`users.password_hash`; credentials must never be stored in frontend JavaScript or
-committed to the repository. All database operations must use parameterized
+`users.password_hash` only for application-managed accounts such as administrators.
+Institutional passwords are validated by Microsoft and must never be received by
+EduMatch. Credentials must never be stored in frontend JavaScript or committed
+to the repository. All database operations must use parameterized
 queries. Student-number approval remains a separate manual verification process;
 approving an account does not mark its enrollment number as verified.
 
-Microsoft student sign-in uses the registered university tenant, validates the
-tenant, immutable object ID, nonce, and `@ues.mx` sign-in name, and uses a
-short-lived, hashed registration handoff before creating a pending student
-profile. The client secret belongs only in backend environment configuration.
+Microsoft sign-in uses the registered university tenant, validates the tenant,
+immutable object ID, nonce, and `@ues.mx` sign-in name, and uses a short-lived,
+hashed registration handoff for tutor applications. The client secret belongs
+only in backend environment configuration. EduMatch never receives or stores
+the institutional password. Public student registration is disabled, and the
+retired `POST /api/users` endpoint returns HTTP 410.
 
 ## Local services
 

@@ -12,15 +12,14 @@ const steps = [
     description: (
       <>
         <p>
-          La inscripción como estudiante consta de 3 pasos. El primero es
-          sencillo: escribe tu correo, matrícula estudiantil, institución
-          educativa y una contraseña segura para proteger tus datos y el
-          registro de tus asesorías.
+          El acceso de estudiante se realiza con una cuenta institucional de
+          Universidad de Sonora. Inicia sesión con Microsoft para validar tu
+          identidad y consultar si tu cuenta ya está registrada.
         </p>
-        <p>Asegúrate de que tus datos sean correctos para continuar con el registro.</p>
+        <p>EduMatch no recibe ni almacena la contraseña de tu correo institucional.</p>
       </>
     ),
-    note: "REGISTRO DE ESTUDIANTE · PASO 1 DE 3",
+    note: "ACCESO INSTITUCIONAL",
     image: firstStepImage,
     alt: "Aula universitaria",
     border: "welcome-border-orange",
@@ -31,14 +30,14 @@ const steps = [
     description: (
       <>
         <p>
-          Al terminar este paso, tus datos serán revisados para validar tu
-          cuenta. Es importante que proporciones un correo institucional válido
-          para recibir la confirmación.
+          Solo las cuentas institucionales existentes y aprobadas pueden
+          ingresar al panel de estudiante. Si tu correo no está registrado,
+          verás una advertencia para contactar a la administración.
         </p>
-        <p>Mientras se valida tu registro, tu acceso permanecerá pendiente de aprobación.</p>
+        <p>La validación del correo no reemplaza la aprobación de la cuenta.</p>
       </>
     ),
-    note: "VALIDACIÓN DE CUENTA · PASO 2 DE 3",
+    note: "CUENTAS APROBADAS",
     image: secondStepImage,
     alt: "Estudiante trabajando en su laptop",
     border: "welcome-border-bordo",
@@ -49,13 +48,13 @@ const steps = [
     description: (
       <>
         <p>
-          Una vez validada tu cuenta, podrás acceder al portal, encontrar tutores
+          Una vez validada tu sesión, podrás acceder al portal, encontrar tutores
           por materia y comenzar a avanzar con acompañamiento académico.
         </p>
         <p>Explora las opciones disponibles y encuentra el apoyo adecuado para tus objetivos.</p>
       </>
     ),
-    note: "ACCEDE AL PORTAL · PASO 3 DE 3",
+    note: "ACCESO AL PORTAL",
     image: thirdStepImage,
     alt: "Libros y materiales para estudiar",
     border: "welcome-border-orange",
