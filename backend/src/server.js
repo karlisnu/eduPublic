@@ -4,6 +4,7 @@ const crypto = require("crypto");
 const path = require("path");
 require("dotenv").config({ path: path.join(__dirname, "../.env") });
 const { pool } = require("./db");
+const openapi = require("./openapi");
 const {
   SESSION_MAX_AGE_SECONDS,
   clearSessionCookie,
@@ -37,6 +38,45 @@ app.use(cors({
 app.use(express.json());
 app.use("/Alumnos/html", express.static(path.join(__dirname, "../../Alumnos/html")));
 app.use("/imagenes", express.static(path.join(__dirname, "../../imagenes")));
+
+app.get("/api-docs.json", (req, res) => {
+  res.json(openapi);
+});
+
+app.get(["/api-docs", "/api-docs/"], (req, res) => {
+  res.type("html").send(`<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>EduMatch API - Swagger UI</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5.17.14/swagger-ui.css">
+    <style>
+      body { margin: 0; background: #fafafa; }
+      .swagger-ui .topbar { background: #173b57; }
+      .swagger-ui .topbar-wrapper .link { display: none; }
+    </style>
+  </head>
+  <body>
+    <div id="swagger-ui"></div>
+    <script src="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5.17.14/swagger-ui-bundle.js"></script>
+    <script>
+      window.onload = () => {
+        window.ui = SwaggerUIBundle({
+          url: "/api-docs.json",
+          dom_id: "#swagger-ui",
+          deepLinking: true,
+          persistAuthorization: true,
+          displayRequestDuration: true,
+          filter: true,
+          presets: [SwaggerUIBundle.presets.apis],
+          layout: "BaseLayout",
+        });
+      };
+    </script>
+  </body>
+</html>`);
+});
 
 function hashPassword(password, salt = crypto.randomBytes(16).toString("hex")) {
   const hash = crypto.scryptSync(password, salt, 64).toString("hex");
@@ -121,6 +161,8 @@ app.get("/", async (req, res) => {
     login: "http://localhost:5173/",
     endpoints: [
       "GET /api/health",
+      "GET /api-docs",
+      "GET /api-docs.json",
       "GET /api/catalogs",
       "POST /api/login",
       "GET /api/auth/microsoft",
@@ -172,9 +214,14 @@ app.get("/api/auth/microsoft/callback", async (req, res, next) => {
   const transaction = parseAuthTransaction(req);
   const callbackState = typeof req.query.state === "string" ? req.query.state : "";
   const code = typeof req.query.code === "string" ? req.query.code : "";
-  const fail = (status) => {
+  const fail = (status, reason) => {
     res.setHeader("Set-Cookie", clearAuthTransactionCookie());
-    return res.redirect(`${frontendOrigin}/?institutional=${encodeURIComponent(status)}`);
+    const redirectUrl = new URL(frontendOrigin);
+    redirectUrl.searchParams.set("institutional", status);
+    if (reason && /^[a-z][a-z\d_]{0,63}$/i.test(reason)) {
+      redirectUrl.searchParams.set("reason", reason);
+    }
+    return res.redirect(redirectUrl.toString());
   };
 
   if (!transaction || !callbackState || !hashesMatch(transaction.state, callbackState)) {
@@ -188,6 +235,14 @@ app.get("/api/auth/microsoft/callback", async (req, res, next) => {
   try {
     identity = await acquireMicrosoftIdentity(code, transaction.nonce, transaction.codeVerifier);
   } catch (error) {
+    if (error.microsoftCode) {
+      console.error("Microsoft authorization code exchange failed:", {
+        error: error.microsoftCode,
+        aadsts: error.aadstsCode || "not provided",
+        correlationId: error.correlationId || "not provided",
+      });
+      return fail("exchange_failed", error.microsoftCode);
+    }
     console.error("Microsoft sign-in verification failed:", error.message);
     return fail("failed");
   }

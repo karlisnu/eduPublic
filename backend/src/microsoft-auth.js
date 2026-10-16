@@ -118,6 +118,22 @@ function verifyMicrosoftIdToken(token, nonce, configuration, signingKeys) {
   return { email, objectId: claims.oid };
 }
 
+function createMicrosoftTokenError(tokenData) {
+  const error = new Error("Microsoft authorization code exchange failed");
+  error.microsoftCode = typeof tokenData.error === "string" &&
+    /^[a-z][a-z\d_]{0,63}$/i.test(tokenData.error)
+    ? tokenData.error
+    : "unknown";
+  error.aadstsCode = typeof tokenData.error_description === "string"
+    ? tokenData.error_description.match(/\bAADSTS\d+\b/)?.[0] || null
+    : null;
+  error.correlationId = typeof tokenData.correlation_id === "string" &&
+    /^[a-f\d-]{36}$/i.test(tokenData.correlation_id)
+    ? tokenData.correlation_id
+    : null;
+  return error;
+}
+
 async function acquireMicrosoftIdentity(code, nonce, codeVerifier) {
   const configuration = getMicrosoftConfiguration();
   if (!configuration) {
@@ -142,9 +158,14 @@ async function acquireMicrosoftIdentity(code, nonce, codeVerifier) {
     }),
     signal: AbortSignal.timeout(10000),
   });
-  const tokenData = await tokenResponse.json();
+  let tokenData;
+  try {
+    tokenData = await tokenResponse.json();
+  } catch {
+    throw new Error("Microsoft token endpoint returned an invalid response");
+  }
   if (!tokenResponse.ok || typeof tokenData.id_token !== "string") {
-    throw new Error("Microsoft authorization code exchange failed");
+    throw createMicrosoftTokenError(tokenData);
   }
   const signingKeys = await getMicrosoftSigningKeys(configuration.tenantId);
   try {
@@ -207,6 +228,7 @@ module.exports = {
   clearAuthTransactionCookie,
   clearRegistrationCookie,
   createAuthorizationUrl,
+  createMicrosoftTokenError,
   getMicrosoftConfiguration,
   hashesMatch,
   parseAuthTransaction,

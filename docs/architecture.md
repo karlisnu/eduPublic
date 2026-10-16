@@ -39,6 +39,11 @@ There is intentionally no `messages`, `conversations`, or chat table in EduMatch
 
 The backend currently exposes:
 
+- Interactive OpenAPI/Swagger UI at `GET /api-docs` and its machine-readable
+  specification at `GET /api-docs.json`. The UI is served by the backend and
+  documents the current API routes, request/response shapes, and session-cookie
+  authentication. Sign in through `POST /api/login` in the UI before trying
+  protected endpoints.
 - Public registration catalogs and registration: `GET /api/catalogs` and
   `POST /api/users`.
 - `POST /api/login`, `GET /api/session`, and `POST /api/logout` for

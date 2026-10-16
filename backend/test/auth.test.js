@@ -12,6 +12,7 @@ const {
 const {
   authTransactionCookie,
   createAuthorizationUrl,
+  createMicrosoftTokenError,
   hashesMatch,
   parseAuthTransaction,
   verifyMicrosoftIdToken,
@@ -156,6 +157,28 @@ test("Microsoft authorization URL uses the configured tenant, callback, and PKCE
       else process.env[name] = previousValues[name];
     }
   }
+});
+
+test("Microsoft token failures expose only safe error codes for diagnosis", () => {
+  const error = createMicrosoftTokenError({
+    error: "invalid_client",
+    error_description: "AADSTS7000215: Invalid client secret provided.",
+    correlation_id: "65260db4-95bf-4cf0-98a9-8ee6ef437df9",
+    access_token: "must-not-be-logged",
+  });
+
+  assert.equal(error.microsoftCode, "invalid_client");
+  assert.equal(error.aadstsCode, "AADSTS7000215");
+  assert.equal(error.correlationId, "65260db4-95bf-4cf0-98a9-8ee6ef437df9");
+  assert.equal(JSON.stringify(error).includes("must-not-be-logged"), false);
+
+  const invalid = createMicrosoftTokenError({
+    error: "invalid client secret",
+    correlation_id: "not-a-guid",
+  });
+  assert.equal(invalid.microsoftCode, "unknown");
+  assert.equal(invalid.aadstsCode, null);
+  assert.equal(invalid.correlationId, null);
 });
 
 test("Microsoft ID token validation checks signature and institutional claims", () => {
