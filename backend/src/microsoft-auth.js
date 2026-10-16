@@ -177,8 +177,14 @@ async function acquireMicrosoftIdentity(code, nonce, codeVerifier) {
   }
 }
 
-function authTransactionCookie(state, nonce, codeVerifier, secure = process.env.NODE_ENV === "production") {
-  return `${AUTH_TRANSACTION_COOKIE}=${state}.${nonce}.${codeVerifier}; HttpOnly; Path=/api/auth/microsoft; SameSite=Lax; Max-Age=${AUTH_TRANSACTION_MAX_AGE_SECONDS}${secure ? "; Secure" : ""}`;
+function authTransactionCookie(
+  state,
+  nonce,
+  codeVerifier,
+  secure = process.env.NODE_ENV === "production",
+  role = "alumno",
+) {
+  return `${AUTH_TRANSACTION_COOKIE}=${state}.${nonce}.${codeVerifier}.${role}; HttpOnly; Path=/api/auth/microsoft; SameSite=Lax; Max-Age=${AUTH_TRANSACTION_MAX_AGE_SECONDS}${secure ? "; Secure" : ""}`;
 }
 
 function clearAuthTransactionCookie(secure = process.env.NODE_ENV === "production") {
@@ -204,8 +210,15 @@ function readCookie(request, name) {
 
 function parseAuthTransaction(request) {
   const value = readCookie(request, AUTH_TRANSACTION_COOKIE);
-  const match = value?.match(/^([a-f\d]{64})\.([a-f\d]{64})\.([a-f\d]{64})$/i);
-  return match ? { state: match[1], nonce: match[2], codeVerifier: match[3] } : null;
+  const match = value?.match(/^([a-f\d]{64})\.([a-f\d]{64})\.([a-f\d]{64})(?:\.(alumno|tutor))?$/i);
+  return match
+    ? {
+      state: match[1],
+      nonce: match[2],
+      codeVerifier: match[3],
+      role: (match[4] || "alumno").toLowerCase(),
+    }
+    : null;
 }
 
 function readRegistrationToken(request) {

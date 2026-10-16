@@ -67,7 +67,8 @@ This applies pending SQL migrations and then inserts local development accounts
 and example data. It does not delete existing records. The seed creates inactive,
 explicitly demo-only career and campus entries for the example student; they are
 not official catalog values and cannot be selected for new registrations. Import
-verified university catalogs before accepting real student registrations.
+verified catalogs and career-subject-semester mappings before enabling tutor
+applications. Student accounts are not registered through the public app.
 
 3. Start the backend and frontend in separate terminals:
 
@@ -85,25 +86,30 @@ Local development accounts (only after running the seed):
 
 | Role | Login | Password |
 | --- | --- | --- |
-| Student | `20260000001` | `AlumnoA1!` |
-| Tutor | `tutor` | `TutorA1!` |
 | Administrator | `admin` | `AdminA1!` |
 
-The student number above is synthetic demo data, not proof of enrollment.
-Never use these accounts or their known passwords in production. The database
-seed command refuses to run when `NODE_ENV=production`.
+Students and tutors now authenticate through Microsoft SSO with an eligible
+`@ues.mx` account. Seeded student/tutor rows are demo data, not proof of
+institutional identity, and cannot use password login. Never use demo
+administrator credentials in production. The database seed command refuses to
+run when `NODE_ENV=production`.
 
-The API exposes active registration catalogs at `GET /api/catalogs`. Registration
-uses `POST /api/users` and writes the account plus its student or tutor profile
-in one transaction. Student registrations must reference active career and campus
-IDs from that endpoint; those accounts and student-number verification remain
-pending until approved through the supported administrative process. Tutor
-registrations also remain pending approval.
+`GET /api/catalogs` exposes active careers, campuses, and subjects.
+`GET /api/catalogs/tutor-subjects?careerId=<id>&currentSemester=<n>` returns
+only subjects mapped to that career at or before the tutor's current semester.
+Load verified career/subject/semester rows into `career_subjects`; the current
+seed does not invent an official curriculum, so tutor signup stays disabled
+until eligible subjects are available. Tutors start registration through
+Microsoft SSO, then submit their profile, 11-digit student number, career,
+semester, average (0-100), and eligible subjects for administrator review.
+Student registration is disabled; an unknown institutional student sees
+“El usuario no está registrado”. The retired `POST /api/users` endpoint returns
+HTTP 410.
 
 Authentication uses a server-side MySQL session and an `HttpOnly`, `SameSite=Strict`
 cookie. Apply migrations with `npm --prefix backend run db:migrate` (or rerun
-`db:setup`); existing installations create the `auth_sessions` table through
-migration 004. The browser restores the login with `GET /api/session` and ends it
+`db:setup`); migration 006 adds tutor academic eligibility and career-subject
+mapping. The browser restores the login with `GET /api/session` and ends it
 with `POST /api/logout`. Tutor search requires an authenticated student session.
 Administrative approval endpoints require an authenticated administrator:
 `GET /api/admin/approvals/pending` and
@@ -111,9 +117,11 @@ Administrative approval endpoints require an authenticated administrator:
 `{"decision":"rejected"}`. Approval decisions are recorded in `approval_events`.
 Interactive API documentation is available at `http://localhost:8000/api-docs`
 after starting the backend. The OpenAPI document is served at
-`http://localhost:8000/api-docs.json`. In Swagger UI, use `POST /api/login` with
-an approved local account before trying protected endpoints; the browser retains
-the resulting HttpOnly session cookie for subsequent requests. Swagger UI assets
+`http://localhost:8000/api-docs.json`. In Swagger UI, use the Microsoft SSO flow
+for students/tutors or `POST /api/login` for an approved administrator before
+trying protected endpoints; the browser retains the resulting HttpOnly session
+cookie for subsequent requests. The administrator frontend entry is
+`http://localhost:5173/admin-login`. Swagger UI assets
 are loaded from jsDelivr, so the docs page needs internet access.
 Set `FRONTEND_ORIGIN` when the browser frontend is hosted at a different origin
 within the same site;
@@ -127,10 +135,11 @@ and `MICROSOFT_REDIRECT_URI` in `backend/.env` (copy the tenant ID and callback
 from `backend/.env.example`; keep the client secret private). Production requires
 an HTTPS callback URI for the deployed backend, also registered in Entra.
 Run `npm --prefix backend run db:migrate` to apply the Microsoft sign-in schema.
-Entra sign-in is available only for `@ues.mx` students; existing student
-profiles are linked by institutional email and still must be approved. New
-students complete the required profile data and remain pending administrator
-approval. Tutors and administrators keep their existing sign-in flow.
+Entra sign-in is available only for `@ues.mx` students and tutors. Existing
+student/tutor profiles are linked by institutional email and must be approved.
+An unregistered student cannot create a public account. An unregistered tutor
+can submit a tutor application after Microsoft validates the institutional
+identity; EduMatch never receives or stores the institutional password.
 
 ## Dev Container and MySQL
 

@@ -28,9 +28,8 @@ const openapi = {
     description: [
       "Documentación interactiva de la API de EduMatch.",
       "",
-      "Usa **Try it out** para probar las rutas. Para las rutas protegidas,",
-      "primero ejecuta `POST /api/login` con una cuenta aprobada. El navegador",
-      "guardará la cookie HttpOnly y la enviará automáticamente a las rutas `/api`.",
+      "Usa **Try it out** para probar las rutas. Los estudiantes y tutores inician sesión con Microsoft SSO;",
+      "los administradores usan `POST /api/login`. El navegador guarda la cookie HttpOnly.",
       "Las rutas de tutor requieren rol `alumno`; las de aprobación requieren rol `admin`.",
       "",
       "Las cuentas de demostración se crean al ejecutar el seed local. No uses esas",
@@ -102,8 +101,8 @@ const openapi = {
     "/api/login": {
       post: {
         tags: ["Autenticación"],
-        summary: "Iniciar sesión y crear una sesión por cookie",
-        description: "La respuesta establece la cookie HttpOnly `edumatch_session`.",
+        summary: "Iniciar sesión de administrador y crear una sesión por cookie",
+        description: "Estudiantes y tutores deben usar Microsoft SSO. Esta ruta acepta únicamente administradores.",
         requestBody: {
           required: true,
           content: {
@@ -146,37 +145,10 @@ const openapi = {
     "/api/users": {
       post: {
         tags: ["Registro"],
-        summary: "Registrar una cuenta de estudiante o tutor",
-        description: "Las cuentas nuevas quedan pendientes de aprobación. No permite registrar administradores.",
-        requestBody: {
-          required: true,
-          content: {
-            "application/json": {
-              schema: {
-                oneOf: [
-                  { $ref: "#/components/schemas/StudentRegistrationRequest" },
-                  { $ref: "#/components/schemas/TutorRegistrationRequest" },
-                ],
-              },
-            },
-          },
-        },
+        summary: "Ruta de registro público retirada",
+        description: "El registro solo se permite después de validar identidad institucional con Microsoft.",
         responses: {
-          201: jsonResponse("Cuenta creada y pendiente de aprobación", {
-            type: "object",
-            properties: {
-              id: { type: "integer" },
-              username: { type: "string" },
-              role: { type: "string", enum: ["alumno", "tutor"] },
-              accountStatus: { type: "string", example: "pending" },
-              applicationStatus: { type: "string", example: "pending" },
-              studentNumberVerificationStatus: { type: "string", example: "pending" },
-            },
-            required: ["id", "username", "role", "accountStatus"],
-          }),
-          400: errorResponse,
-          409: errorResponse,
-          503: errorResponse,
+          410: errorResponse,
         },
       },
     },
@@ -184,7 +156,15 @@ const openapi = {
       get: {
         tags: ["Registro"],
         summary: "Iniciar el acceso institucional Microsoft",
-        description: "Redirige al inicio de sesión institucional de Universidad de Sonora.",
+        description: "Estudiantes y tutores autentican sus credenciales directamente con Microsoft. El valor role puede ser alumno o tutor.",
+        parameters: [
+          {
+            name: "role",
+            in: "query",
+            required: false,
+            schema: { type: "string", enum: ["alumno", "tutor"], default: "alumno" },
+          },
+        ],
         responses: {
           302: { description: "Redirección a Microsoft o al frontend" },
         },
@@ -219,7 +199,7 @@ const openapi = {
     "/api/auth/microsoft/registration": {
       get: {
         tags: ["Registro"],
-        summary: "Consultar el correo de un registro institucional pendiente",
+        summary: "Consultar el correo verificado de una solicitud de tutor pendiente",
         responses: {
           200: jsonResponse("Correo institucional verificado", {
             type: "object",
@@ -232,28 +212,68 @@ const openapi = {
       },
       post: {
         tags: ["Registro"],
-        summary: "Completar el perfil de un estudiante verificado por Microsoft",
-        description: "El registro institucional se inicia desde `/api/auth/microsoft`; el token temporal se conserva en una cookie HttpOnly.",
+        summary: "Enviar el registro de un tutor verificado por Microsoft",
+        description: "La solicitud queda pendiente de aprobación administrativa. Las materias deben estar en el catálogo oficial de la carrera y no superar el semestre indicado.",
         requestBody: {
           required: true,
           content: {
             "application/json": {
-              schema: { $ref: "#/components/schemas/MicrosoftStudentRegistrationRequest" },
+              schema: { $ref: "#/components/schemas/MicrosoftTutorRegistrationRequest" },
             },
           },
         },
         responses: {
-          201: jsonResponse("Cuenta creada y pendiente de aprobación", {
+          201: jsonResponse("Solicitud de tutor creada y pendiente de aprobación", {
             type: "object",
             properties: {
-              role: { type: "string", example: "alumno" },
+              id: { type: "integer" },
+              username: { type: "string" },
+              role: { type: "string", example: "tutor" },
               accountStatus: { type: "string", example: "pending" },
+              applicationStatus: { type: "string", example: "pending" },
             },
-            required: ["role", "accountStatus"],
+            required: ["id", "username", "role", "accountStatus", "applicationStatus"],
           }),
           400: errorResponse,
           401: errorResponse,
           409: errorResponse,
+          503: errorResponse,
+        },
+      },
+    },
+    "/api/catalogs/tutor-subjects": {
+      get: {
+        tags: ["Catálogos"],
+        summary: "Listar materias elegibles para un tutor",
+        description: "Solo devuelve materias vinculadas al plan de estudios de la carrera que estén en el semestre actual o uno anterior.",
+        parameters: [
+          {
+            name: "careerId",
+            in: "query",
+            required: true,
+            schema: { type: "integer", minimum: 1 },
+          },
+          {
+            name: "currentSemester",
+            in: "query",
+            required: true,
+            schema: { type: "integer", minimum: 1 },
+          },
+        ],
+        responses: {
+          200: jsonResponse("Materias elegibles", {
+            type: "array",
+            items: {
+              type: "object",
+              properties: {
+                id: { type: "integer" },
+                name: { type: "string" },
+                semesterNumber: { type: "integer" },
+              },
+              required: ["id", "name", "semesterNumber"],
+            },
+          }),
+          400: errorResponse,
           503: errorResponse,
         },
       },
@@ -370,7 +390,7 @@ const openapi = {
         type: "apiKey",
         in: "cookie",
         name: "edumatch_session",
-        description: "Cookie HttpOnly creada por `POST /api/login`; autentícate desde Swagger UI para que el navegador la guarde.",
+        description: "Cookie HttpOnly creada por Microsoft SSO o `POST /api/login` para administradores.",
       },
     },
     schemas: {
@@ -385,10 +405,10 @@ const openapi = {
       LoginRequest: {
         type: "object",
         properties: {
-          username: { type: "string", description: "Matrícula del estudiante, o usuario/correo de tutor o administrador" },
+          username: { type: "string", description: "Usuario o correo del administrador" },
           identifier: { type: "string", description: "Alternativa a username" },
           password: { type: "string", format: "password" },
-          role: { type: "string", enum: ["alumno", "tutor", "admin"] },
+          role: { type: "string", enum: ["admin"] },
         },
         required: ["password", "role"],
         anyOf: [{ required: ["username"] }, { required: ["identifier"] }],
@@ -402,48 +422,24 @@ const openapi = {
         },
         required: ["id", "username", "role"],
       },
-      StudentRegistrationRequest: {
+      MicrosoftTutorRegistrationRequest: {
         type: "object",
         properties: {
-          username: { type: "string", minLength: 3, maxLength: 80, description: "Solo letras, incluidas letras acentuadas" },
-          password: { type: "string", format: "password", minLength: 6, description: "Debe incluir mayúscula, número y carácter especial" },
-          email: { type: "string", format: "email", maxLength: 255 },
-          role: { type: "string", enum: ["alumno"] },
+          username: { type: "string", minLength: 3, maxLength: 80, pattern: "^\\p{L}+$" },
           firstName: { type: "string", maxLength: 80 },
           lastName: { type: "string", maxLength: 120 },
           studentNumber: { type: "string", pattern: "^[0-9]{11}$" },
           careerId: { type: "integer", minimum: 1 },
-          campusId: { type: "integer", minimum: 1 },
-          phone: { type: "string", pattern: "^[0-9]{11}$" },
-        },
-        required: ["username", "password", "email", "role", "firstName", "lastName", "studentNumber", "careerId", "campusId", "phone"],
-      },
-      TutorRegistrationRequest: {
-        type: "object",
-        properties: {
-          username: { type: "string", minLength: 3, maxLength: 80, description: "Solo letras, incluidas letras acentuadas" },
-          password: { type: "string", format: "password", minLength: 6, description: "Debe incluir mayúscula, número y carácter especial" },
-          email: { type: "string", format: "email", maxLength: 255 },
-          role: { type: "string", enum: ["tutor"] },
-          firstName: { type: "string", maxLength: 80 },
-          lastName: { type: "string", maxLength: 120 },
+          currentSemester: { type: "integer", minimum: 1 },
+          average: { type: "number", minimum: 0, maximum: 100 },
+          subjectIds: { type: "array", minItems: 1, uniqueItems: true, items: { type: "integer", minimum: 1 } },
           bio: { type: "string", maxLength: 100 },
           experience: { type: "string", minLength: 1, maxLength: 100 },
         },
-        required: ["username", "password", "email", "role", "firstName", "lastName", "experience"],
-      },
-      MicrosoftStudentRegistrationRequest: {
-        type: "object",
-        properties: {
-          username: { type: "string", minLength: 3, maxLength: 80 },
-          firstName: { type: "string", maxLength: 80 },
-          lastName: { type: "string", maxLength: 120 },
-          studentNumber: { type: "string", pattern: "^[0-9]{11}$" },
-          phone: { type: "string", pattern: "^[0-9]{11}$" },
-          careerId: { type: "integer", minimum: 1 },
-          campusId: { type: "integer", minimum: 1 },
-        },
-        required: ["username", "firstName", "lastName", "studentNumber", "phone", "careerId", "campusId"],
+        required: [
+          "username", "firstName", "lastName", "studentNumber", "careerId",
+          "currentSemester", "average", "subjectIds", "experience",
+        ],
       },
       Tutor: {
         type: "object",
@@ -464,9 +460,16 @@ const openapi = {
           id: { type: "integer" },
           username: { type: "string" },
           email: { type: "string", format: "email" },
+          login_identifier: { type: "string", pattern: "^[0-9]{11}$", nullable: true },
           role: { type: "string", enum: ["alumno", "tutor"] },
           account_status: { type: "string", example: "pending" },
           application_status: { type: "string", nullable: true, example: "pending" },
+          first_name: { type: "string", nullable: true },
+          last_name: { type: "string", nullable: true },
+          career: { type: "string", nullable: true },
+          current_semester: { type: "integer", nullable: true },
+          average: { type: "number", nullable: true, minimum: 0, maximum: 100 },
+          subjects: { type: "string", nullable: true },
         },
         required: ["id", "username", "email", "role", "account_status"],
       },

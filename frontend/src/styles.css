@@ -175,6 +175,7 @@ form { display: flex; flex-direction: column; gap: 18px; }
   padding: 0.9rem 1rem;
   width: 100%;
 }
+textarea.dark-input { font: inherit; resize: vertical; }
 .forgot-password {
   color: #c3553e;
   font-size: 0.8rem;
@@ -215,6 +216,32 @@ form { display: flex; flex-direction: column; gap: 18px; }
 .microsoft-login-button:focus-visible {
   background: #f4f6f7;
 }
+.tutor-create-account {
+  background: transparent;
+  border: 1px solid #e88c00;
+  border-radius: 12px;
+  color: #a65700;
+  display: block;
+  font-weight: 700;
+  margin-top: 10px;
+  padding: 1rem 1.2rem;
+  text-align: center;
+}
+.tutor-create-account:hover,
+.tutor-create-account:focus-visible { background: #fff2dd; }
+.subject-checklist {
+  border: 1px solid #d8d0c6;
+  border-radius: 12px;
+  display: grid;
+  gap: 12px;
+  margin: 0;
+  padding: 16px;
+}
+.subject-checklist legend { font-size: .9rem; font-weight: 700; padding: 0 6px; }
+.subject-checkbox { align-items: center; display: flex; gap: 10px; }
+.subject-checkbox input { accent-color: #e88c00; height: 18px; width: 18px; }
+.subject-checkbox small { color: #718084; }
+.btn-main-login:disabled { cursor: not-allowed; opacity: .55; }
 .institutional-registration {
   background: #fffaf4;
   border-radius: 24px;
@@ -284,6 +311,8 @@ h1, h2, h3, p { margin-top: 0; }
 .approval-card h2 { font-size: 1.1rem; margin-bottom: 6px; }
 .approval-card p { color: #647176; margin-bottom: 8px; }
 .approval-card span { color: #c3553e; font-size: .85rem; font-weight: 700; }
+.approval-academic-data { margin-top: 12px; }
+.approval-academic-data p { margin-bottom: 4px; }
 .approval-actions { display: flex; gap: 10px; }
 .approval-actions button {
   background: #1d2d34;
@@ -545,7 +574,7 @@ h2 { font: 700 2rem 'Comfortaa', sans-serif; margin-bottom: 0; }
 .back-to-welcome {
   background: none;
   border: 0;
-  color: var(--welcome-bordo);
+  color: #7d1f2d;
   cursor: pointer;
   font-size: .85rem;
   font-weight: 700;

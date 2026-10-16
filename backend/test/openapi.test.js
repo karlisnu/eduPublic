@@ -19,6 +19,7 @@ test("OpenAPI document describes every current API endpoint", () => {
       "GET /api/auth/microsoft/callback",
       "GET /api/auth/microsoft/registration",
       "GET /api/catalogs",
+      "GET /api/catalogs/tutor-subjects",
       "GET /api/health",
       "GET /api/session",
       "GET /api/tutors",
@@ -37,7 +38,7 @@ test("OpenAPI secures protected routes with the existing session cookie", () => 
     type: "apiKey",
     in: "cookie",
     name: "edumatch_session",
-    description: "Cookie HttpOnly creada por `POST /api/login`; autentícate desde Swagger UI para que el navegador la guarde.",
+    description: "Cookie HttpOnly creada por Microsoft SSO o `POST /api/login` para administradores.",
   });
 
   for (const path of [
@@ -55,14 +56,13 @@ test("OpenAPI secures protected routes with the existing session cookie", () => 
   assert.equal(openapi.paths["/api/admin/approvals/pending"].get.security[0].sessionCookie.length, 0);
 });
 
-test("registration schemas document the supported roles and exact student number format", () => {
+test("authentication schemas document Microsoft tutor signup and admin-only password login", () => {
   const schemas = openapi.components.schemas;
 
-  assert.deepEqual(schemas.StudentRegistrationRequest.properties.role.enum, ["alumno"]);
-  assert.deepEqual(schemas.TutorRegistrationRequest.properties.role.enum, ["tutor"]);
-  assert.deepEqual(
-    schemas.StudentRegistrationRequest.properties.studentNumber.pattern,
-    "^[0-9]{11}$",
-  );
-  assert.equal(schemas.TutorRegistrationRequest.properties.experience.maxLength, 100);
+  assert.deepEqual(schemas.LoginRequest.properties.role.enum, ["admin"]);
+  assert.equal(schemas.MicrosoftTutorRegistrationRequest.properties.studentNumber.pattern, "^[0-9]{11}$");
+  assert.equal(schemas.MicrosoftTutorRegistrationRequest.properties.average.maximum, 100);
+  assert.equal(schemas.MicrosoftTutorRegistrationRequest.properties.subjectIds.minItems, 1);
+  assert.equal(schemas.MicrosoftTutorRegistrationRequest.properties.experience.maxLength, 100);
+  assert.equal(schemas.StudentRegistrationRequest, undefined);
 });

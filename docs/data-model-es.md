@@ -16,6 +16,9 @@ erDiagram
     USERS ||--o{ APPROVAL_EVENTS : reviews
     CAREERS ||--o{ STUDENT_PROFILES : selected_for
     CAMPUSES ||--o{ STUDENT_PROFILES : selected_for
+    CAREERS ||--o{ TUTOR_PROFILES : studies
+    CAREERS ||--o{ CAREER_SUBJECTS : defines
+    SUBJECTS ||--o{ CAREER_SUBJECTS : scheduled_as
     TUTOR_PROFILES }o--o{ SUBJECTS : teaches
     TUTOR_PROFILES ||--o{ TUTOR_STUDENT_CONNECTIONS : manages
     STUDENT_PROFILES ||--o{ TUTOR_STUDENT_CONNECTIONS : requests
@@ -32,6 +35,7 @@ erDiagram
     USERS {
         int id PK
         string username UK
+        string login_identifier UK "matrícula de 11 dígitos"
         string email UK
         string password_hash
         enum role
@@ -71,6 +75,9 @@ erDiagram
         string last_name
         string bio max 100 chars
         string experience max 100 chars
+        int career_id FK
+        int current_semester
+        decimal average "0-100"
         boolean is_available
         enum application_status
     }
@@ -79,6 +86,12 @@ erDiagram
         int id PK
         string name UK
         text description max 100 words
+    }
+
+    CAREER_SUBJECTS {
+        int career_id PK, FK
+        int subject_id PK, FK
+        int semester_number
     }
 
     TUTOR_STUDENT_CONNECTIONS {
@@ -141,8 +154,9 @@ erDiagram
 | `users` | Autenticación, rol, estado de aprobación, nombre de usuario y correo |
 | `careers`, `campuses` | Catálogos de carreras y campus; solo los registros activos se pueden seleccionar |
 | `student_profiles` | Datos académicos y de contacto, y verificación de matrícula |
-| `tutor_profiles` | Biografía, experiencia, indicador de disponibilidad y estado de solicitud |
+| `tutor_profiles` | Carrera, semestre, promedio reportado, biografía, experiencia, disponibilidad y estado de solicitud |
 | `subjects` | Catálogo de materias; conserva los nombres y limita descripciones a 100 palabras |
+| `career_subjects` | Relación oficial de materias y semestres por carrera |
 | `tutor_subjects` | Relación muchos a muchos entre tutores y materias |
 | `tutor_student_connections` | Solicitudes y relaciones aceptadas entre estudiante y tutor |
 | `tutor_ratings` | Calificaciones de estudiantes asignadas a tutores, de 1 a 5 |
@@ -157,27 +171,28 @@ erDiagram
 3. Un archivo solo puede enviarse de un tutor a un estudiante a través de su conexión.
 4. Una calificación del estudiante evalúa a un tutor; no es lo mismo que una evaluación del estudiante.
 5. Las calificaciones, evaluaciones y archivos deben autorizarse con una conexión existente entre estudiante y tutor en el backend.
-6. Las contraseñas se almacenan como hashes, nunca como texto plano.
+6. EduMatch solo almacena hashes para las cuentas con contraseña propia, como la administración. Las credenciales institucionales las valida Microsoft y EduMatch nunca las recibe ni las guarda.
 7. La base de datos no tiene entidad de mensaje, conversación ni chat.
 8. Nombres de usuario y nombres de perfiles solo aceptan letras. El correo debe tener formato válido, sin espacios y ser único.
 9. La matrícula y el teléfono deben tener exactamente 11 dígitos. La unicidad no confirma que la matrícula exista: se requiere una fuente oficial de la Universidad de Sonora y el estado permanece pendiente hasta verificarla.
 10. Carrera y campus son referencias a catálogos; solo sus opciones activas deben ofrecerse. Los valores heredados se conservan inactivos hasta cotejarlos con catálogos oficiales; no inventar opciones oficiales.
-11. Biografía y experiencia de tutor: máximo 100 caracteres cada una. Comentarios de calificaciones y evaluaciones: máximo 50 caracteres. Las calificaciones conservan `created_at` y no tienen actualización automática.
-12. El administrador es una cuenta de `users` con rol `admin`; no requiere una tabla de contraseñas separada ni registro público. El administrador inicial se provisiona por un proceso controlado fuera de la aplicación pública. Solo administradores autenticados pueden modificar perfiles o crear eventos de aprobación; el backend debe autorizarlo.
+11. Las materias que imparte un tutor deben estar vinculadas a su carrera en `career_subjects` y corresponder a su semestre actual o uno anterior. Las solicitudes nuevas incluyen promedio reportado de 0 a 100 y quedan pendientes de revisión administrativa. No se deben inventar materias ni semestres; el alta se bloquea hasta cargar el plan oficial.
+12. Biografía y experiencia de tutor: máximo 100 caracteres cada una. Comentarios de calificaciones y evaluaciones: máximo 50 caracteres. Las calificaciones conservan `created_at` y no tienen actualización automática.
+13. El administrador es una cuenta de `users` con rol `admin`; no requiere una tabla de contraseñas separada ni registro público. El administrador inicial se provisiona por un proceso controlado fuera de la aplicación pública. Solo administradores autenticados pueden modificar perfiles o crear eventos de aprobación; el backend debe autorizarlo.
 
 ## ¿Por qué existen archivos Markdown y SQL?
 
 - Este archivo Markdown explica el modelo para el equipo, la documentación, las revisiones y las presentaciones.
 - [`backend/sql/schema.sql`](../backend/sql/schema.sql) crea las tablas reales de MySQL, índices, claves foráneas y restricciones.
 
-La migración [`backend/sql/migrations/002_apply_profile_data_rules.sql`](../backend/sql/migrations/002_apply_profile_data_rules.sql) actualiza bases existentes y conserva las carreras/campus heredados como inactivos. Antes de aplicar las nuevas restricciones, se deben revisar y corregir datos heredados inválidos (matrículas, teléfonos, nombres o textos demasiado largos); nunca se debe inventar una matrícula verificada.
+La migración [`backend/sql/migrations/002_apply_profile_data_rules.sql`](../backend/sql/migrations/002_apply_profile_data_rules.sql) actualiza bases existentes y conserva las carreras/campus heredados como inactivos. La migración 006 incorpora los datos académicos de tutor y `career_subjects`; esta última debe cargarse solo desde planes oficiales. Antes de aplicar restricciones, se deben revisar y corregir datos heredados inválidos; nunca se debe inventar una matrícula verificada.
 
 La documentación, el esquema y las migraciones deben mantenerse alineados.
 
 ## Explicación de cada función / entidad
 
 ### `users`
-Representa a cualquier persona registrada: estudiante, tutor o administrador. Guarda nombre de usuario (solo letras), correo único con formato válido, hash de contraseña, rol y estado de aprobación. Las cuentas de administrador usan el rol `admin`; no duplican credenciales en otra tabla y no se crean mediante registro público.
+Representa a cualquier persona registrada: estudiante, tutor o administrador. Guarda nombre de usuario (solo letras), correo único con formato válido, rol y estado de aprobación. `password_hash` es nullable y solo contiene hashes para los accesos administrados por EduMatch; las cuentas de estudiantes y tutores usan Microsoft SSO. Las cuentas de administrador usan el rol `admin`; no duplican credenciales en otra tabla y no se crean mediante registro público.
 
 ### `careers` y `campuses`
 Son catálogos de referencia para las opciones de carrera y campus. Solo se ofrecen al estudiante los registros activos que se hayan cotejado con una fuente oficial de la Universidad de Sonora. Los valores antiguos se conservan como inactivos hasta verificarse; no se deben inventar opciones.
@@ -186,7 +201,10 @@ Son catálogos de referencia para las opciones de carrera y campus. Solo se ofre
 Es la información académica y de contacto del estudiante. La matrícula y el teléfono contienen exactamente 11 dígitos. La matrícula tiene estado de verificación y solo debe marcarse verificada tras confirmarla con una fuente oficial de la Universidad de Sonora. Carrera y campus son claves foráneas a catálogos, no texto libre ni booleanos. Solo se deben ofrecer registros activos, previamente cargados desde datos oficiales.
 
 ### `tutor_profiles`
-Es la información específica del tutor. Los nombres solo admiten letras; biografía y experiencia tienen un máximo de 100 caracteres. `is_available` es el indicador booleano de disponibilidad; se eliminó el campo textual `availability`.
+Es la información específica del tutor. Los nombres solo admiten letras; biografía y experiencia tienen un máximo de 100 caracteres. Carrera, semestre actual y promedio reportado (0-100) quedan sujetos a revisión administrativa. `is_available` es el indicador booleano de disponibilidad; se eliminó el campo textual `availability`.
+
+### `career_subjects`
+Relaciona cada materia oficial con el semestre en que se imparte dentro de una carrera. El registro y la búsqueda solo permiten materias de ese semestre o uno anterior al semestre actual del tutor.
 
 ### `subjects`
 Es el catálogo de materias que pueden enseñar los tutores. Se conservan los nombres actuales; las descripciones permiten hasta 100 palabras.

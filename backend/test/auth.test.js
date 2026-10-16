@@ -120,7 +120,12 @@ test("Microsoft auth transaction cookie keeps state, nonce, and PKCE verifier Ht
   assert.match(cookie, /HttpOnly/);
   assert.match(cookie, /SameSite=Lax/);
   assert.match(cookie, /Secure/);
-  assert.deepEqual(parseAuthTransaction(request), { state, nonce, codeVerifier });
+  assert.deepEqual(parseAuthTransaction(request), { state, nonce, codeVerifier, role: "alumno" });
+  const tutorCookie = authTransactionCookie(state, nonce, codeVerifier, true, "tutor");
+  assert.deepEqual(
+    parseAuthTransaction({ headers: { cookie: tutorCookie.split(";")[0] } }),
+    { state, nonce, codeVerifier, role: "tutor" },
+  );
   assert.equal(hashesMatch(state, state), true);
   assert.equal(hashesMatch(state, nonce), false);
 });

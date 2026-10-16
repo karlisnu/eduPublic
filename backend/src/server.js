@@ -78,11 +78,6 @@ app.get(["/api-docs", "/api-docs/"], (req, res) => {
 </html>`);
 });
 
-function hashPassword(password, salt = crypto.randomBytes(16).toString("hex")) {
-  const hash = crypto.scryptSync(password, salt, 64).toString("hex");
-  return `${salt}:${hash}`;
-}
-
 function verifyPassword(password, storedHash) {
   if (typeof storedHash !== "string") return false;
   const [salt, hash] = storedHash.split(":");
@@ -90,13 +85,6 @@ function verifyPassword(password, storedHash) {
 
   const calculatedHash = crypto.scryptSync(password, salt, 64).toString("hex");
   return crypto.timingSafeEqual(Buffer.from(hash, "hex"), Buffer.from(calculatedHash, "hex"));
-}
-
-function isValidPassword(password) {
-  return password.length >= 6 &&
-    /\p{Lu}/u.test(password) &&
-    /\p{N}/u.test(password) &&
-    /[^\p{L}\p{N}]/u.test(password);
 }
 
 async function requireDatabase() {
@@ -122,13 +110,19 @@ const prepareDatabase = async () => {
   const requiredColumnsByTable = {
     users: ["id", "username", "login_identifier", "email", "password_hash", "microsoft_object_id", "role", "account_status", "approved_at"],
     auth_sessions: ["id", "user_id", "token_hash", "expires_at"],
-    microsoft_registration_sessions: ["id", "token_hash", "email", "microsoft_object_id", "expires_at"],
+    microsoft_registration_sessions: [
+      "id", "token_hash", "email", "microsoft_object_id", "role", "expires_at",
+    ],
     approval_events: ["id", "user_id", "reviewer_id", "decision", "created_at"],
     student_profiles: ["user_id", "student_number", "career_id", "campus_id"],
-    tutor_profiles: ["user_id", "application_status", "is_available"],
+    tutor_profiles: [
+      "user_id", "application_status", "is_available", "career_id",
+      "current_semester", "average",
+    ],
     careers: ["id", "name", "is_active"],
     campuses: ["id", "name", "is_active"],
     subjects: ["id", "name"],
+    career_subjects: ["career_id", "subject_id", "semester_number"],
     tutor_subjects: ["tutor_id", "subject_id"],
     tutor_ratings: ["tutor_id", "rating"],
   };
@@ -164,6 +158,7 @@ app.get("/", async (req, res) => {
       "GET /api-docs",
       "GET /api-docs.json",
       "GET /api/catalogs",
+      "GET /api/catalogs/tutor-subjects",
       "POST /api/login",
       "GET /api/auth/microsoft",
       "GET /api/auth/microsoft/callback",
@@ -171,7 +166,6 @@ app.get("/", async (req, res) => {
       "POST /api/auth/microsoft/registration",
       "GET /api/session",
       "POST /api/logout",
-      "POST /api/users",
       "GET /api/tutors",
       "GET /api/admin/approvals/pending",
       "PATCH /api/admin/users/:id/approval",
@@ -190,11 +184,19 @@ app.get("/api/health", async (req, res, next) => {
 });
 
 app.get("/api/auth/microsoft", async (req, res, next) => {
+  const role = typeof req.query.role === "string" ? req.query.role : "alumno";
+  if (!["alumno", "tutor"].includes(role)) {
+    return res.status(400).json({ error: "El tipo de cuenta institucional no es válido" });
+  }
   if (!getMicrosoftConfiguration()) {
-    return res.redirect(`${process.env.FRONTEND_ORIGIN || "http://localhost:5173"}/?institutional=unavailable`);
+    return res.redirect(
+      `${process.env.FRONTEND_ORIGIN || "http://localhost:5173"}/?institutional=unavailable&role=${role}`,
+    );
   }
   if (readSessionToken(req)) {
-    return res.redirect(`${process.env.FRONTEND_ORIGIN || "http://localhost:5173"}/?institutional=logout_first`);
+    return res.redirect(
+      `${process.env.FRONTEND_ORIGIN || "http://localhost:5173"}/?institutional=logout_first&role=${role}`,
+    );
   }
 
   const state = randomToken();
@@ -202,7 +204,13 @@ app.get("/api/auth/microsoft", async (req, res, next) => {
   const codeVerifier = randomToken();
   try {
     const authorizationUrl = await createAuthorizationUrl(state, nonce, codeVerifier);
-    res.setHeader("Set-Cookie", authTransactionCookie(state, nonce, codeVerifier));
+    res.setHeader("Set-Cookie", authTransactionCookie(
+      state,
+      nonce,
+      codeVerifier,
+      process.env.NODE_ENV === "production",
+      role,
+    ));
     res.redirect(authorizationUrl);
   } catch (error) {
     next(error);
@@ -215,9 +223,13 @@ app.get("/api/auth/microsoft/callback", async (req, res, next) => {
   const callbackState = typeof req.query.state === "string" ? req.query.state : "";
   const code = typeof req.query.code === "string" ? req.query.code : "";
   const fail = (status, reason) => {
-    res.setHeader("Set-Cookie", clearAuthTransactionCookie());
+    res.setHeader("Set-Cookie", [
+      clearAuthTransactionCookie(),
+      clearRegistrationCookie(),
+    ]);
     const redirectUrl = new URL(frontendOrigin);
     redirectUrl.searchParams.set("institutional", status);
+    if (transaction?.role === "tutor") redirectUrl.searchParams.set("role", "tutor");
     if (reason && /^[a-z][a-z\d_]{0,63}$/i.test(reason)) {
       redirectUrl.searchParams.set("reason", reason);
     }
@@ -251,9 +263,11 @@ app.get("/api/auth/microsoft/callback", async (req, res, next) => {
     await requireDatabase();
     const [users] = await pool.query(
       `SELECT u.id, u.username, u.email, u.role, u.account_status,
-              u.microsoft_object_id, sp.user_id AS student_profile_id
+              u.microsoft_object_id, sp.user_id AS student_profile_id,
+              tp.user_id AS tutor_profile_id, tp.application_status
        FROM users u
        LEFT JOIN student_profiles sp ON sp.user_id = u.id
+       LEFT JOIN tutor_profiles tp ON tp.user_id = u.id
        WHERE u.email = ? OR u.microsoft_object_id = ?
        LIMIT 2`,
       [identity.email, identity.objectId],
@@ -262,7 +276,10 @@ app.get("/api/auth/microsoft/callback", async (req, res, next) => {
     if (users.length > 1) return fail("conflict");
     const user = users[0];
     if (user) {
-      if (user.role !== "alumno" || !user.student_profile_id ||
+      const hasExpectedProfile = transaction.role === "alumno"
+        ? user.role === "alumno" && user.student_profile_id
+        : user.role === "tutor" && user.tutor_profile_id;
+      if (!hasExpectedProfile ||
           (user.microsoft_object_id && user.microsoft_object_id !== identity.objectId)) {
         return fail("conflict");
       }
@@ -277,6 +294,9 @@ app.get("/api/auth/microsoft/callback", async (req, res, next) => {
       if (user.account_status !== "approved") {
         return fail(user.account_status === "pending" ? "pending" : "disabled");
       }
+      if (user.role === "tutor" && user.application_status !== "approved") {
+        return fail(user.application_status === "pending" ? "pending" : "disabled");
+      }
 
       const token = randomToken();
       const expiresAt = new Date(Date.now() + SESSION_MAX_AGE_SECONDS * 1000);
@@ -286,10 +306,13 @@ app.get("/api/auth/microsoft/callback", async (req, res, next) => {
       );
       res.setHeader("Set-Cookie", [
         clearAuthTransactionCookie(),
+        clearRegistrationCookie(),
         sessionCookie(token),
       ]);
       return res.redirect(frontendOrigin);
     }
+
+    if (transaction.role === "alumno") return fail("not_registered");
 
     const registrationToken = randomToken();
     await pool.query("DELETE FROM microsoft_registration_sessions WHERE expires_at <= NOW()");
@@ -299,8 +322,8 @@ app.get("/api/auth/microsoft/callback", async (req, res, next) => {
     );
     await pool.query(
       `INSERT INTO microsoft_registration_sessions
-        (token_hash, email, microsoft_object_id, expires_at)
-       VALUES (?, ?, ?, ?)`,
+        (token_hash, email, microsoft_object_id, role, expires_at)
+       VALUES (?, ?, ?, 'tutor', ?)`,
       [
         hashSessionToken(registrationToken),
         identity.email,
@@ -312,7 +335,7 @@ app.get("/api/auth/microsoft/callback", async (req, res, next) => {
       clearAuthTransactionCookie(),
       registrationCookie(registrationToken),
     ]);
-    return res.redirect(`${frontendOrigin}/?institutional=register`);
+    return res.redirect(`${frontendOrigin}/?institutional=tutor_register&role=tutor`);
   } catch (error) {
     return next(error);
   }
@@ -326,7 +349,7 @@ app.get("/api/auth/microsoft/registration", async (req, res, next) => {
     await requireDatabase();
     const [rows] = await pool.query(
       `SELECT email FROM microsoft_registration_sessions
-       WHERE token_hash = ? AND expires_at > NOW()
+       WHERE token_hash = ? AND expires_at > NOW() AND role = 'tutor'
        LIMIT 1`,
       [hashSessionToken(token)],
     );
@@ -348,9 +371,12 @@ app.post("/api/auth/microsoft/registration", async (req, res, next) => {
   const firstName = typeof body.firstName === "string" ? body.firstName.trim() : "";
   const lastName = typeof body.lastName === "string" ? body.lastName.trim() : "";
   const studentNumber = typeof body.studentNumber === "string" ? body.studentNumber : "";
-  const phone = typeof body.phone === "string" ? body.phone : "";
-  const careerId = Number(body.careerId);
-  const campusId = Number(body.campusId);
+  const careerId = typeof body.careerId === "number" ? body.careerId : Number.NaN;
+  const currentSemester = typeof body.currentSemester === "number" ? body.currentSemester : Number.NaN;
+  const average = typeof body.average === "number" ? body.average : Number.NaN;
+  const subjectIds = Array.isArray(body.subjectIds) ? body.subjectIds : [];
+  const bio = typeof body.bio === "string" ? body.bio.trim() : "";
+  const experience = typeof body.experience === "string" ? body.experience.trim() : "";
   const validName = (value, maxLength) => value.length > 0 &&
     value.length <= maxLength && /^\p{L}+$/u.test(value);
 
@@ -358,12 +384,22 @@ app.post("/api/auth/microsoft/registration", async (req, res, next) => {
       !validName(firstName, 80) || !validName(lastName, 120)) {
     return res.status(400).json({ error: "Usuario, nombre o apellido tienen un formato inválido" });
   }
-  if (!/^\d{11}$/.test(studentNumber) || !/^\d{11}$/.test(phone)) {
-    return res.status(400).json({ error: "La matrícula y el teléfono deben tener exactamente 11 dígitos" });
+  if (!/^\d{11}$/.test(studentNumber)) {
+    return res.status(400).json({ error: "La matrícula debe tener exactamente 11 dígitos" });
   }
   if (!Number.isSafeInteger(careerId) || careerId < 1 ||
-      !Number.isSafeInteger(campusId) || campusId < 1) {
-    return res.status(400).json({ error: "Selecciona una carrera y un campus válidos" });
+      !Number.isSafeInteger(currentSemester) || currentSemester < 1 ||
+      currentSemester > 65535 ||
+      !Number.isFinite(average) || average < 0 || average > 100) {
+    return res.status(400).json({ error: "Selecciona una carrera, semestre y promedio válidos (0 a 100)" });
+  }
+  if (bio.length > 100 || experience.length < 1 || experience.length > 100) {
+    return res.status(400).json({ error: "La biografía y experiencia deben tener como máximo 100 caracteres" });
+  }
+  if (subjectIds.length === 0 ||
+      subjectIds.some((id) => !Number.isSafeInteger(id) || id < 1) ||
+      new Set(subjectIds).size !== subjectIds.length) {
+    return res.status(400).json({ error: "Selecciona al menos una materia elegible" });
   }
 
   let connection;
@@ -376,7 +412,7 @@ app.post("/api/auth/microsoft/registration", async (req, res, next) => {
 
     const [sessions] = await connection.query(
       `SELECT email, microsoft_object_id FROM microsoft_registration_sessions
-       WHERE token_hash = ? AND expires_at > NOW()
+       WHERE token_hash = ? AND expires_at > NOW() AND role = 'tutor'
        FOR UPDATE`,
       [hashSessionToken(token)],
     );
@@ -391,19 +427,31 @@ app.post("/api/auth/microsoft/registration", async (req, res, next) => {
       "SELECT id FROM careers WHERE id = ? AND is_active = TRUE",
       [careerId],
     );
-    const [campuses] = await connection.query(
-      "SELECT id FROM campuses WHERE id = ? AND is_active = TRUE",
-      [campusId],
-    );
-    if (careers.length === 0 || campuses.length === 0) {
+    if (careers.length === 0) {
       await connection.rollback();
       transactionStarted = false;
-      return res.status(400).json({ error: "La carrera o campus seleccionado no está activo en el catálogo" });
+      return res.status(400).json({ error: "La carrera seleccionada no está activa en el catálogo" });
+    }
+
+    const subjectPlaceholders = subjectIds.map(() => "?").join(", ");
+    const [eligibleSubjects] = await connection.query(
+      `SELECT subject_id
+       FROM career_subjects
+       WHERE career_id = ? AND semester_number <= ?
+         AND subject_id IN (${subjectPlaceholders})`,
+      [careerId, currentSemester, ...subjectIds],
+    );
+    if (eligibleSubjects.length !== subjectIds.length) {
+      await connection.rollback();
+      transactionStarted = false;
+      return res.status(400).json({
+        error: "Una o más materias no pertenecen a la carrera o superan tu semestre actual",
+      });
     }
 
     const [existingUsers] = await connection.query(
-      "SELECT id FROM users WHERE email = ? OR microsoft_object_id = ? LIMIT 1",
-      [registration.email, registration.microsoft_object_id],
+      "SELECT id FROM users WHERE email = ? OR microsoft_object_id = ? OR login_identifier = ? LIMIT 1",
+      [registration.email, registration.microsoft_object_id, studentNumber],
     );
     if (existingUsers.length > 0) {
       await connection.rollback();
@@ -414,15 +462,29 @@ app.post("/api/auth/microsoft/registration", async (req, res, next) => {
     const [userResult] = await connection.query(
       `INSERT INTO users
         (username, login_identifier, email, password_hash, microsoft_object_id, role, account_status)
-       VALUES (?, ?, ?, NULL, ?, 'alumno', 'pending')`,
+       VALUES (?, ?, ?, NULL, ?, 'tutor', 'pending')`,
       [username, studentNumber, registration.email, registration.microsoft_object_id],
     );
     await connection.query(
-      `INSERT INTO student_profiles
-        (user_id, first_name, last_name, student_number, student_number_verification_status,
-         career_id, campus_id, phone)
-       VALUES (?, ?, ?, ?, 'pending', ?, ?, ?)`,
-      [userResult.insertId, firstName, lastName, studentNumber, careerId, campusId, phone],
+      `INSERT INTO tutor_profiles
+        (user_id, first_name, last_name, bio, experience, career_id, current_semester,
+         average, application_status)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending')`,
+      [
+        userResult.insertId,
+        firstName,
+        lastName,
+        bio || null,
+        experience,
+        careerId,
+        currentSemester,
+        average,
+      ],
+    );
+    const subjectValues = subjectIds.map(() => "(?, ?)").join(", ");
+    await connection.query(
+      `INSERT INTO tutor_subjects (tutor_id, subject_id) VALUES ${subjectValues}`,
+      subjectIds.flatMap((subjectId) => [userResult.insertId, subjectId]),
     );
     await connection.query(
       "DELETE FROM microsoft_registration_sessions WHERE id = ?",
@@ -431,7 +493,13 @@ app.post("/api/auth/microsoft/registration", async (req, res, next) => {
     await connection.commit();
     transactionStarted = false;
     res.setHeader("Set-Cookie", clearRegistrationCookie());
-    return res.status(201).json({ role: "alumno", accountStatus: "pending" });
+    return res.status(201).json({
+      id: userResult.insertId,
+      username,
+      role: "tutor",
+      accountStatus: "pending",
+      applicationStatus: "pending",
+    });
   } catch (error) {
     if (connection && transactionStarted) {
       await connection.rollback();
@@ -443,6 +511,37 @@ app.post("/api/auth/microsoft/registration", async (req, res, next) => {
     return next(error);
   } finally {
     if (connection) connection.release();
+  }
+});
+
+app.get("/api/catalogs/tutor-subjects", async (req, res, next) => {
+  const careerId = Number(req.query.careerId);
+  const currentSemester = Number(req.query.currentSemester);
+  if (!Number.isSafeInteger(careerId) || careerId < 1 ||
+      !Number.isSafeInteger(currentSemester) || currentSemester < 1 || currentSemester > 65535) {
+    return res.status(400).json({ error: "Indica una carrera y semestre válidos" });
+  }
+
+  try {
+    await requireDatabase();
+    const [careers] = await pool.query(
+      "SELECT id FROM careers WHERE id = ? AND is_active = TRUE",
+      [careerId],
+    );
+    if (careers.length === 0) {
+      return res.status(400).json({ error: "La carrera seleccionada no está activa en el catálogo" });
+    }
+    const [subjects] = await pool.query(
+      `SELECT s.id, s.name, cs.semester_number AS semesterNumber
+       FROM career_subjects cs
+       INNER JOIN subjects s ON s.id = cs.subject_id
+       WHERE cs.career_id = ? AND cs.semester_number <= ?
+       ORDER BY cs.semester_number, s.name`,
+      [careerId, currentSemester],
+    );
+    return res.json(subjects);
+  } catch (error) {
+    return next(error);
   }
 });
 
@@ -475,45 +574,27 @@ app.post("/api/login", async (req, res, next) => {
   const role = typeof body.role === "string" ? body.role : "";
 
   if (!identifier || !password || !role) {
-    return res.status(400).json({ error: "Matrícula o usuario y contraseña son obligatorios" });
+    return res.status(400).json({ error: "El usuario y la contraseña administrativos son obligatorios" });
   }
   if (!["alumno", "tutor", "admin"].includes(role)) {
     return res.status(400).json({ error: "El tipo de cuenta no es válido" });
+  }
+  if (role !== "admin") {
+    return res.status(403).json({
+      error: "El acceso de estudiantes y tutores debe validarse exclusivamente con Microsoft",
+    });
   }
 
   try {
     await requireDatabase();
 
-    let query;
-    if (role === "alumno") {
-      query = pool.query(
-        `SELECT u.id, u.username, u.password_hash, u.role, u.account_status
-         FROM users u
-         INNER JOIN student_profiles sp ON sp.user_id = u.id
-         WHERE u.login_identifier = ? AND sp.student_number = u.login_identifier
-           AND u.role = 'alumno'
-         LIMIT 1`,
-        [identifier],
-      );
-    } else if (role === "tutor") {
-      query = pool.query(
-        `SELECT u.id, u.username, u.password_hash, u.role, u.account_status,
-                tp.application_status
-         FROM users u
-         INNER JOIN tutor_profiles tp ON tp.user_id = u.id
-         WHERE (u.username = ? OR u.email = ?) AND u.role = 'tutor'
-         LIMIT 1`,
-        [identifier, identifier],
-      );
-    } else if (role === "admin") {
-      query = pool.query(
-        `SELECT id, username, password_hash, role, account_status
-         FROM users
-         WHERE (login_identifier = ? OR username = ? OR email = ?) AND role = 'admin'
-         LIMIT 1`,
-        [identifier, identifier, identifier],
-      );
-    }
+    const query = pool.query(
+      `SELECT id, username, password_hash, role, account_status
+       FROM users
+       WHERE (login_identifier = ? OR username = ? OR email = ?) AND role = 'admin'
+       LIMIT 1`,
+      [identifier, identifier, identifier],
+    );
     const [rows] = await query;
 
     if (rows.length === 0 || !verifyPassword(password, rows[0].password_hash)) {
@@ -522,10 +603,6 @@ app.post("/api/login", async (req, res, next) => {
     if (rows[0].account_status !== "approved") {
       return res.status(403).json({ error: "La cuenta está pendiente de aprobación o no está habilitada" });
     }
-    if (role === "tutor" && rows[0].application_status !== "approved") {
-      return res.status(403).json({ error: "La solicitud de tutor está pendiente de aprobación" });
-    }
-
     const token = crypto.randomBytes(32).toString("hex");
     const expiresAt = new Date(Date.now() + SESSION_MAX_AGE_SECONDS * 1000);
     await pool.query("DELETE FROM auth_sessions WHERE expires_at <= NOW()");
@@ -565,13 +642,21 @@ app.get(
     try {
       await requireDatabase();
       const [rows] = await pool.query(
-        `SELECT u.id, u.username, u.email, u.role, u.account_status,
-                tp.application_status
+        `SELECT u.id, u.username, u.email, u.login_identifier, u.role, u.account_status,
+                tp.application_status, tp.first_name, tp.last_name,
+                tp.current_semester, tp.average, c.name AS career,
+                GROUP_CONCAT(DISTINCT s.name ORDER BY s.name SEPARATOR ', ') AS subjects
          FROM users u
          LEFT JOIN tutor_profiles tp ON tp.user_id = u.id
+         LEFT JOIN careers c ON c.id = tp.career_id
+         LEFT JOIN tutor_subjects ts ON ts.tutor_id = tp.user_id
+         LEFT JOIN subjects s ON s.id = ts.subject_id
          WHERE (u.role = 'alumno' AND u.account_status = 'pending')
             OR (u.role = 'tutor' AND
                 (u.account_status = 'pending' OR tp.application_status = 'pending'))
+         GROUP BY u.id, u.username, u.email, u.login_identifier, u.role, u.account_status,
+                  tp.application_status, tp.first_name, tp.last_name,
+                  tp.current_semester, tp.average, c.name, u.created_at
          ORDER BY u.created_at ASC`,
       );
       res.json(rows);
@@ -664,131 +749,10 @@ app.patch(
   },
 );
 
-app.post("/api/users", async (req, res, next) => {
-  const body = req.body && typeof req.body === "object" ? req.body : {};
-  const username = typeof body.username === "string" ? body.username.trim() : "";
-  const password = typeof body.password === "string" ? body.password : "";
-  const role = typeof body.role === "string" ? body.role : "";
-  const email = typeof body.email === "string" ? body.email : "";
-  const usernameContainsOnlyLetters = /^\p{L}+$/u.test(username);
-  const emailHasValidFormat = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-  const firstName = typeof body.firstName === "string" ? body.firstName.trim() : "";
-  const lastName = typeof body.lastName === "string" ? body.lastName.trim() : "";
-  const isValidName = (value) => /^\p{L}+$/u.test(value);
-
-  if (username.length < 3 || username.length > 80 ||
-      email.length > 255 || !usernameContainsOnlyLetters || !emailHasValidFormat) {
-    return res.status(400).json({ error: "El usuario o el correo tienen un formato inválido" });
-  }
-  if (!isValidPassword(password)) {
-    return res.status(400).json({
-      error: "La contraseña debe tener al menos 6 caracteres, una mayúscula, un número y un carácter especial",
-    });
-  }
-  if (!["alumno", "tutor"].includes(role)) {
-    return res.status(400).json({ error: "El rol de registro no es válido" });
-  }
-  if (!isValidName(firstName) || firstName.length > 80 ||
-      !isValidName(lastName) || lastName.length > 120) {
-    return res.status(400).json({ error: "El nombre y apellido solo pueden contener letras" });
-  }
-
-  let studentNumber = "";
-  let careerId;
-  let campusId;
-  let phone = "";
-  let bio = "";
-  let experience = "";
-  if (role === "alumno") {
-    studentNumber = typeof body.studentNumber === "string" ? body.studentNumber : "";
-    careerId = Number(body.careerId);
-    campusId = Number(body.campusId);
-    phone = typeof body.phone === "string" ? body.phone : "";
-    if (!/^\d{11}$/.test(studentNumber) || !/^\d{11}$/.test(phone)) {
-      return res.status(400).json({ error: "La matrícula y el teléfono deben tener exactamente 11 dígitos" });
-    }
-    if (!Number.isSafeInteger(careerId) || careerId < 1 || !Number.isSafeInteger(campusId) || campusId < 1) {
-      return res.status(400).json({ error: "Selecciona una carrera y un campus válidos" });
-    }
-  } else {
-    bio = typeof body.bio === "string" ? body.bio.trim() : "";
-    experience = typeof body.experience === "string" ? body.experience.trim() : "";
-    if (bio.length > 100 || experience.length < 1 || experience.length > 100) {
-      return res.status(400).json({ error: "La biografía y la experiencia deben tener como máximo 100 caracteres" });
-    }
-  }
-
-  let connection;
-  let transactionStarted = false;
-  try {
-    await requireDatabase();
-    connection = await pool.getConnection();
-    await connection.beginTransaction();
-    transactionStarted = true;
-
-    if (role === "alumno") {
-      const [careers] = await connection.query(
-        "SELECT id FROM careers WHERE id = ? AND is_active = TRUE",
-        [careerId],
-      );
-      const [campuses] = await connection.query(
-        "SELECT id FROM campuses WHERE id = ? AND is_active = TRUE",
-        [campusId],
-      );
-      if (careers.length === 0 || campuses.length === 0) {
-        await connection.rollback();
-        transactionStarted = false;
-        return res.status(400).json({ error: "La carrera o campus seleccionado no está activo en el catálogo" });
-      }
-    }
-
-    const [result] = await connection.query(
-      `INSERT INTO users
-        (username, login_identifier, email, password_hash, role, account_status)
-       VALUES (?, ?, ?, ?, ?, 'pending')`,
-      [username, role === "alumno" ? studentNumber : null, email, hashPassword(password), role],
-    );
-
-    if (role === "alumno") {
-      await connection.query(
-        `INSERT INTO student_profiles
-          (user_id, first_name, last_name, student_number, student_number_verification_status,
-           career_id, campus_id, phone)
-         VALUES (?, ?, ?, ?, 'pending', ?, ?, ?)`,
-        [result.insertId, firstName, lastName, studentNumber, careerId, campusId, phone],
-      );
-    } else {
-      await connection.query(
-        `INSERT INTO tutor_profiles
-          (user_id, first_name, last_name, bio, experience, application_status)
-         VALUES (?, ?, ?, ?, ?, 'pending')`,
-        [result.insertId, firstName, lastName, bio || null, experience],
-      );
-    }
-
-    await connection.commit();
-    transactionStarted = false;
-    res.status(201).json({
-      id: result.insertId,
-      username,
-      role,
-      accountStatus: "pending",
-      ...(role === "tutor"
-        ? { applicationStatus: "pending" }
-        : { studentNumberVerificationStatus: "pending" }),
-    });
-  } catch (error) {
-    if (connection && transactionStarted) {
-      await connection.rollback();
-      transactionStarted = false;
-    }
-    if (error.code === "ER_DUP_ENTRY") {
-      return res.status(409).json({ error: "El usuario ya existe" });
-    }
-    next(error);
-  } finally {
-    if (connection) connection.release();
-  }
+app.post("/api/users", (_req, res) => {
+  res.status(410).json({
+    error: "El registro público fue retirado. Estudiantes y tutores deben validar su identidad institucional con Microsoft.",
+  });
 });
 
 app.get("/api/tutors", requireAuthentication, requireRoles("alumno"), async (req, res, next) => {
@@ -807,8 +771,13 @@ app.get("/api/tutors", requireAuthentication, requireRoles("alumno"), async (req
         tp.is_available
       FROM tutor_profiles tp
       INNER JOIN users u ON u.id = tp.user_id
+      INNER JOIN careers c ON c.id = tp.career_id AND c.is_active = TRUE
       INNER JOIN tutor_subjects ts ON ts.tutor_id = tp.user_id
       INNER JOIN subjects s ON s.id = ts.subject_id
+      INNER JOIN career_subjects cs
+        ON cs.career_id = tp.career_id
+       AND cs.subject_id = ts.subject_id
+       AND cs.semester_number <= tp.current_semester
       LEFT JOIN tutor_ratings tr ON tr.tutor_id = tp.user_id
       WHERE tp.is_available = 1
         AND tp.application_status = 'approved'
@@ -845,8 +814,13 @@ app.get("/api/tutors/:id", requireAuthentication, requireRoles("alumno"), async 
          tp.is_available
        FROM tutor_profiles tp
        INNER JOIN users u ON u.id = tp.user_id
+       INNER JOIN careers c ON c.id = tp.career_id AND c.is_active = TRUE
        INNER JOIN tutor_subjects ts ON ts.tutor_id = tp.user_id
        INNER JOIN subjects s ON s.id = ts.subject_id
+       INNER JOIN career_subjects cs
+         ON cs.career_id = tp.career_id
+        AND cs.subject_id = ts.subject_id
+        AND cs.semester_number <= tp.current_semester
        LEFT JOIN tutor_ratings tr ON tr.tutor_id = tp.user_id
        WHERE tp.user_id = ?
          AND tp.is_available = 1
