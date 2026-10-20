@@ -59,7 +59,8 @@ test("OpenAPI secures protected routes with the existing session cookie", () => 
 test("authentication schemas document Microsoft tutor signup and admin-only password login", () => {
   const schemas = openapi.components.schemas;
 
-  assert.deepEqual(schemas.LoginRequest.properties.role.enum, ["admin"]);
+  assert.deepEqual(schemas.LoginRequest.required, ["identifier", "password"]);
+  assert.equal(schemas.LoginRequest.properties.role, undefined);
   assert.equal(schemas.MicrosoftTutorRegistrationRequest.properties.studentNumber.pattern, "^[0-9]{11}$");
   assert.equal(schemas.MicrosoftTutorRegistrationRequest.properties.average.maximum, 100);
   assert.equal(schemas.MicrosoftTutorRegistrationRequest.properties.subjectIds.minItems, 1);

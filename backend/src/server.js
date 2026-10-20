@@ -5,6 +5,7 @@ const path = require("path");
 require("dotenv").config({ path: path.join(__dirname, "../.env") });
 const { pool } = require("./db");
 const openapi = require("./openapi");
+const { AdminLoginRequestDto, AdminLoginResponseDto } = require("./dtos/admin-login.dto");
 const {
   SESSION_MAX_AGE_SECONDS,
   clearSessionCookie,
@@ -564,25 +565,11 @@ app.get("/api/catalogs", async (req, res, next) => {
 });
 
 app.post("/api/login", async (req, res, next) => {
-  const body = req.body && typeof req.body === "object" ? req.body : {};
-  const identifier = typeof body.username === "string"
-    ? body.username.trim()
-    : typeof body.identifier === "string"
-      ? body.identifier.trim()
-      : "";
-  const password = typeof body.password === "string" ? body.password : "";
-  const role = typeof body.role === "string" ? body.role : "";
-
-  if (!identifier || !password || !role) {
-    return res.status(400).json({ error: "El usuario y la contraseña administrativos son obligatorios" });
-  }
-  if (!["alumno", "tutor", "admin"].includes(role)) {
-    return res.status(400).json({ error: "El tipo de cuenta no es válido" });
-  }
-  if (role !== "admin") {
-    return res.status(403).json({
-      error: "El acceso de estudiantes y tutores debe validarse exclusivamente con Microsoft",
-    });
+  let loginRequest;
+  try {
+    loginRequest = AdminLoginRequestDto.from(req.body);
+  } catch (error) {
+    return res.status(400).json({ error: error.message });
   }
 
   try {
@@ -593,11 +580,11 @@ app.post("/api/login", async (req, res, next) => {
        FROM users
        WHERE (login_identifier = ? OR username = ? OR email = ?) AND role = 'admin'
        LIMIT 1`,
-      [identifier, identifier, identifier],
+      [loginRequest.identifier, loginRequest.identifier, loginRequest.identifier],
     );
     const [rows] = await query;
 
-    if (rows.length === 0 || !verifyPassword(password, rows[0].password_hash)) {
+    if (rows.length === 0 || !verifyPassword(loginRequest.password, rows[0].password_hash)) {
       return res.status(401).json({ error: "Usuario o contraseña incorrectos" });
     }
     if (rows[0].account_status !== "approved") {
@@ -611,7 +598,7 @@ app.post("/api/login", async (req, res, next) => {
       [rows[0].id, hashSessionToken(token), expiresAt],
     );
     res.setHeader("Set-Cookie", sessionCookie(token));
-    res.json({ id: rows[0].id, username: rows[0].username, role: rows[0].role });
+    res.json(new AdminLoginResponseDto(rows[0]));
   } catch (error) {
     next(error);
   }

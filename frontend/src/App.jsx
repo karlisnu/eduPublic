@@ -83,7 +83,7 @@ function App() {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ identifier, password, role: "admin" }),
+        body: JSON.stringify({ identifier, password }),
       });
       const data = await readApiResponse(response);
       if (!response.ok) throw new Error(data.error || "No se pudo iniciar sesión.");

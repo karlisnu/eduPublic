@@ -405,13 +405,10 @@ const openapi = {
       LoginRequest: {
         type: "object",
         properties: {
-          username: { type: "string", description: "Usuario o correo del administrador" },
-          identifier: { type: "string", description: "Alternativa a username" },
+          identifier: { type: "string", description: "Usuario o correo del administrador" },
           password: { type: "string", format: "password" },
-          role: { type: "string", enum: ["admin"] },
         },
-        required: ["password", "role"],
-        anyOf: [{ required: ["username"] }, { required: ["identifier"] }],
+        required: ["identifier", "password"],
       },
       SessionUser: {
         type: "object",
