@@ -13,8 +13,8 @@ const steps = [
       <>
         <p>
           El acceso de estudiante se realiza con una cuenta institucional de
-          Universidad de Sonora. Inicia sesión con Microsoft para validar tu
-          identidad y consultar si tu cuenta ya está registrada.
+          Universidad de Sonora. Vincula tu correo con Microsoft y, si aún no
+          tienes perfil, completa el formulario de registro.
         </p>
         <p>EduMatch no recibe ni almacena la contraseña de tu correo institucional.</p>
       </>
@@ -30,9 +30,9 @@ const steps = [
     description: (
       <>
         <p>
-          Solo las cuentas institucionales existentes y aprobadas pueden
-          ingresar al panel de estudiante. Si tu correo no está registrado,
-          verás una advertencia para contactar a la administración.
+          Después de verificar tu correo institucional podrás completar tus
+          datos académicos. Una cuenta nueva queda pendiente hasta que la
+          administración la apruebe.
         </p>
         <p>La validación del correo no reemplaza la aprobación de la cuenta.</p>
       </>
@@ -48,7 +48,7 @@ const steps = [
     description: (
       <>
         <p>
-          Una vez validada tu sesión, podrás acceder al portal, encontrar tutores
+          Una vez aprobado tu perfil, podrás acceder al portal, encontrar tutores
           por materia y comenzar a avanzar con acompañamiento académico.
         </p>
         <p>Explora las opciones disponibles y encuentra el apoyo adecuado para tus objetivos.</p>

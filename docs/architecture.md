@@ -8,7 +8,7 @@ EDU-EduMatch currently includes a React frontend prototype served by Vite from `
 
 | Component | Location | Responsibility |
 | --- | --- | --- |
-| React frontend | `frontend/src/` | React components, JSX entry point, and CSS styles for student and tutor views |
+| React frontend | `frontend/src/` | React components, JSX entry point, and CSS styles for student and tutor views, including `TutorManagementPage.jsx` |
 | Frontend tooling | `frontend/package.json`, `frontend/vite.config.mjs` | React 19 dependencies, Vite development server, and `/api` proxy on port 5173 |
 | Legacy frontend pages | `Alumnos/html/` | Older static student and tutor views, forms, dashboards, and navigation |
 | Legacy frontend scripts | `js/` | Older login, tutor search, filtering, and UI behavior |
@@ -33,6 +33,10 @@ The complete MySQL model is defined in [`backend/sql/schema.sql`](../backend/sql
 
 The canonical schema is [`backend/sql/schema.sql`](../backend/sql/schema.sql). New databases use it directly; existing databases apply [`backend/sql/migrations/002_apply_profile_data_rules.sql`](../backend/sql/migrations/002_apply_profile_data_rules.sql). Legacy career/campus values are retained as inactive until verified against official catalogs. Invalid legacy values must be reviewed before the migration's stricter constraints are applied; enrollment verification must never be simulated.
 
+Apply the weekly tutor-management tables to an existing installation with
+`npm --prefix backend run db:migrate` (or use `npm --prefix backend run db:setup`
+for a fresh development database and its seed data).
+
 The connections, ratings, evaluations, and files retain both role foreign keys and a connection foreign key. The backend must validate that those IDs belong to the same connection before writing data; SQL foreign keys alone cannot enforce that cross-column business rule.
 
 There is intentionally no `messages`, `conversations`, or chat table in EduMatch.
@@ -53,10 +57,29 @@ The backend currently exposes:
   `POST /api/login` remains only for administrators.
 - `GET /api/auth/microsoft` and its callback for single-tenant Universidad de
   Sonora student/tutor sign-in through Microsoft Entra ID. Existing accounts
-  link by institutional email and retain their approval requirement. An unknown
-  student is not registered. An unknown tutor can submit an application after
-  identity verification; the account remains pending administrative approval.
+  link by institutional email and retain their approval requirement. New
+  students and tutors first verify their institutional identity, then submit
+  their respective profile/application forms; both remain pending administrative
+  approval.
+- `POST /api/auth/microsoft/student-registration` creates a student profile
+  from the verified handoff. The 11-digit student number remains pending manual
+  verification; EduMatch does not simulate verification against university data.
 - Tutor search and detail endpoints, restricted to authenticated students.
+- Tutor weekly management at `/api/tutor-management`, implemented as
+  `routes/tutor-management.routes.js` → `services/tutor-management.service.js` →
+  `repositories/tutor-management.repository.js`. The service validates week
+  boundaries, permitted hours, request decisions, and the 15-distinct-students
+  cap; `TutorRequestDto` is converted to a `TutorRequest` entity before storage.
+- `tutor_availability`, `tutoring_requests`, `tutor_weekly_students`, and
+  `tutor_sessions` preserve each week's selectable slots, request decisions,
+  distinct accepted students, and independently scheduled session states.
+  Accepting a student creates a persisted `pending` tutoring session with no
+  assigned slot; scheduling, completion, and cancellation update that session.
+  Tutor writes lock the tutor profile in a transaction so capacity checks,
+  availability changes, and schedule conflict checks are serialized.
+- Students can submit a tutoring request for an approved tutor and an eligible
+  subject through `POST /api/tutor-management/requests`; this is a tutoring
+  connection workflow, not an internal messaging feature.
 - Pending-approval listing and approval decisions, restricted to authenticated
   administrators and recorded in `approval_events`.
 
@@ -73,10 +96,11 @@ approving an account does not mark its enrollment number as verified.
 
 Microsoft sign-in uses the registered university tenant, validates the tenant,
 immutable object ID, nonce, and `@ues.mx` sign-in name, and uses a short-lived,
-hashed registration handoff for tutor applications. The client secret belongs
+hashed registration handoff for student profiles and tutor applications. The client secret belongs
 only in backend environment configuration. EduMatch never receives or stores
 the institutional password. Public student registration is disabled, and the
-retired `POST /api/users` endpoint returns HTTP 410.
+retired `POST /api/users` endpoint returns HTTP 410; registrations can only be
+submitted through a Microsoft-verified handoff.
 
 ## Local services
 

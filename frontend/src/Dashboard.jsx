@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { API_URL, readApiResponse } from "./api.js";
+import TutorManagementPage from "./TutorManagementPage.jsx";
 
 function Dashboard({ user, authError, onLogout, onSessionExpired }) {
   const [subject, setSubject] = useState("");
@@ -9,6 +10,15 @@ function Dashboard({ user, authError, onLogout, onSessionExpired }) {
   const [approvals, setApprovals] = useState([]);
   const [approvalsLoading, setApprovalsLoading] = useState(false);
   const [approvalsError, setApprovalsError] = useState("");
+  const [requestTutor, setRequestTutor] = useState(null);
+  const [requestSubject, setRequestSubject] = useState("");
+  const [requestTopic, setRequestTopic] = useState("");
+  const [requestShift, setRequestShift] = useState("matutino");
+  const [requestWeekday, setRequestWeekday] = useState("");
+  const [requestHour, setRequestHour] = useState("");
+  const [requestMessage, setRequestMessage] = useState("");
+  const [requestError, setRequestError] = useState("");
+  const [submittingRequest, setSubmittingRequest] = useState(false);
 
   useEffect(() => {
     if (user.role !== "alumno") return undefined;
@@ -83,6 +93,53 @@ function Dashboard({ user, authError, onLogout, onSessionExpired }) {
     }
   };
 
+  const submitTutorRequest = async (event) => {
+    event.preventDefault();
+    setRequestError("");
+    setRequestMessage("");
+    if (!requestTutor || !requestSubject || requestTopic.trim().length === 0) {
+      setRequestError("Describe brevemente el tema en el que necesitas ayuda.");
+      return;
+    }
+    if (Boolean(requestWeekday) !== Boolean(requestHour)) {
+      setRequestError("Selecciona el día y la hora preferidos, o déjalos ambos vacíos.");
+      return;
+    }
+
+    const today = new Date();
+    today.setDate(today.getDate() - ((today.getDay() + 6) % 7));
+    const weekStart = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+    setSubmittingRequest(true);
+    try {
+      const response = await fetch(`${API_URL}/api/tutor-management/requests`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          tutorId: requestTutor.id,
+          subject: requestSubject,
+          topic: requestTopic.trim(),
+          schoolShift: requestShift,
+          weekStart,
+          preferredWeekday: requestWeekday ? Number(requestWeekday) : null,
+          preferredStartHour: requestHour ? Number(requestHour) : null,
+        }),
+      });
+      const data = await readApiResponse(response);
+      if (response.status === 401) onSessionExpired("La sesión expiró. Inicia sesión nuevamente.");
+      if (!response.ok) throw new Error(data.error || "No se pudo enviar la solicitud.");
+      setRequestTutor(null);
+      setRequestTopic("");
+      setRequestWeekday("");
+      setRequestHour("");
+      setRequestMessage("Solicitud enviada al tutor para esta semana.");
+    } catch (requestFailure) {
+      setRequestError(requestFailure.message);
+    } finally {
+      setSubmittingRequest(false);
+    }
+  };
+
   return (
     <main className="app-shell">
       <header className="topbar">
@@ -125,6 +182,16 @@ function Dashboard({ user, authError, onLogout, onSessionExpired }) {
                       <p>Materias: {item.subjects || "Sin materias registradas"}</p>
                     </div>
                   )}
+                  {item.role === "alumno" && (
+                    <div className="approval-academic-data">
+                      <p>Nombre: {item.first_name} {item.last_name}</p>
+                      <p>Matrícula: {item.student_number || item.login_identifier}</p>
+                      <p>Carrera: {item.career || "Sin carrera registrada"}</p>
+                      <p>Campus: {item.campus || "Sin campus registrado"}</p>
+                      <p>Teléfono: {item.phone || "Sin teléfono registrado"}</p>
+                      <p>Verificación de matrícula: {item.student_number_verification_status || "pendiente"}</p>
+                    </div>
+                  )}
                 </div>
                 <div className="approval-actions">
                   <button type="button" onClick={() => handleApproval(item.id, "approved")}>Aprobar</button>
@@ -135,11 +202,7 @@ function Dashboard({ user, authError, onLogout, onSessionExpired }) {
           </div>
         </section>
       ) : user.role === "tutor" ? (
-        <section className="admin-panel">
-          <p className="eyebrow">Tutor</p>
-          <h1>Sesión segura</h1>
-          <p className="message">Tu cuenta está autenticada. El panel de gestión de estudiantes se integrará en este módulo.</p>
-        </section>
+        <TutorManagementPage onSessionExpired={onSessionExpired} />
       ) : (
         <>
           <section className="hero">
@@ -158,6 +221,8 @@ function Dashboard({ user, authError, onLogout, onSessionExpired }) {
           </section>
 
           <section className="results" aria-live="polite">
+            {requestMessage && <p className="management-alert success" role="status">{requestMessage}</p>}
+            {requestError && <p className="management-alert error" role="alert">{requestError}</p>}
             <div className="section-heading">
               <div>
                 <p className="eyebrow">Resultados</p>
@@ -183,6 +248,59 @@ function Dashboard({ user, authError, onLogout, onSessionExpired }) {
                       <span>★ {tutor.rating}</span>
                       <span>{tutor.is_available ? "Disponible" : "No disponible"}</span>
                     </div>
+                    {tutor.is_available && (
+                      <button
+                        className="management-primary request-tutor-button"
+                        type="button"
+                        onClick={() => {
+                          setRequestError("");
+                          if (requestTutor?.id === tutor.id) {
+                            setRequestTutor(null);
+                          } else {
+                            const tutorSubjects = tutor.subject.split(", ");
+                            setRequestTutor(tutor);
+                            setRequestSubject(tutorSubjects.includes(subject.trim())
+                              ? subject.trim()
+                              : tutorSubjects[0]);
+                          }
+                        }}
+                      >
+                        Solicitar tutoría
+                      </button>
+                    )}
+                    {requestTutor?.id === tutor.id && (
+                      <form className="tutor-request-form" onSubmit={submitTutorRequest}>
+                        <label>Materia
+                          <select value={requestSubject} onChange={(event) => setRequestSubject(event.target.value)}>
+                            {requestTutor.subject.split(", ").map((tutorSubject) => (
+                              <option key={tutorSubject} value={tutorSubject}>{tutorSubject}</option>
+                            ))}
+                          </select>
+                        </label>
+                        <label>¿Qué tema necesitas resolver?
+                          <textarea className="dark-input" maxLength={500} required value={requestTopic} onChange={(event) => setRequestTopic(event.target.value)} />
+                        </label>
+                        <label>Turno escolar
+                          <select value={requestShift} onChange={(event) => setRequestShift(event.target.value)}>
+                            <option value="matutino">Matutino</option><option value="vespertino">Vespertino</option><option value="nocturno">Nocturno</option>
+                          </select>
+                        </label>
+                        <label>Día preferido (opcional)
+                          <select value={requestWeekday} onChange={(event) => { setRequestWeekday(event.target.value); if (!event.target.value) setRequestHour(""); }}>
+                            <option value="">Horario flexible</option><option value="1">Lunes</option><option value="2">Martes</option><option value="3">Miércoles</option><option value="4">Jueves</option><option value="5">Viernes</option>
+                          </select>
+                        </label>
+                        {requestWeekday && <label>Hora preferida
+                          <select required value={requestHour} onChange={(event) => setRequestHour(event.target.value)}>
+                            <option value="">Selecciona una hora</option>
+                            {Array.from({ length: 13 }, (_, index) => index + 7).map((hour) => (
+                              <option key={hour} value={hour}>{`${hour % 12 || 12}:00 ${hour < 12 ? "a. m." : "p. m."}`}</option>
+                            ))}
+                          </select>
+                        </label>}
+                        <button className="management-primary" type="submit" disabled={submittingRequest}>{submittingRequest ? "Enviando..." : "Enviar solicitud"}</button>
+                      </form>
+                    )}
                   </div>
                 </article>
               ))}

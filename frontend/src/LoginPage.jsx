@@ -48,8 +48,8 @@ function LoginPage({
               {selectedRole === "alumno" ? (
                 <>
                   <p className="message">
-                    Accede con tu cuenta institucional registrada. Las cuentas nuevas no tienen
-                    registro público.
+                    Inicia sesión con Microsoft. Si aún no tienes perfil, primero se vinculará tu
+                    correo institucional y después podrás completar tus datos.
                   </p>
                   {authError && <p className="login-error" role="alert">{authError}</p>}
                   <button
@@ -60,7 +60,7 @@ function LoginPage({
                   >
                     {institutionalLoginLoading
                       ? "Conectando con EduMatch..."
-                      : "Continuar con cuenta institucional UES"}
+                      : "Vincular correo institucional / continuar con Microsoft"}
                   </button>
                 </>
               ) : (

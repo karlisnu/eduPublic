@@ -43,6 +43,7 @@ const openapi = {
     { name: "Registro", description: "Registro de usuarios y autenticación institucional" },
     { name: "Catálogos", description: "Datos disponibles para completar el registro" },
     { name: "Tutores", description: "Búsqueda de tutores por estudiantes autenticados" },
+    { name: "Gestión de tutorías", description: "Disponibilidad semanal, solicitudes, alumnos aceptados y programación" },
     { name: "Administración", description: "Revisión de solicitudes por administradores" },
   ],
   paths: {
@@ -199,12 +200,15 @@ const openapi = {
     "/api/auth/microsoft/registration": {
       get: {
         tags: ["Registro"],
-        summary: "Consultar el correo verificado de una solicitud de tutor pendiente",
+        summary: "Consultar el correo y rol de la identidad Microsoft verificada",
         responses: {
           200: jsonResponse("Correo institucional verificado", {
             type: "object",
-            properties: { email: { type: "string", format: "email" } },
-            required: ["email"],
+            properties: {
+              email: { type: "string", format: "email" },
+              role: { type: "string", enum: ["alumno", "tutor"] },
+            },
+            required: ["email", "role"],
           }),
           401: errorResponse,
           503: errorResponse,
@@ -233,6 +237,38 @@ const openapi = {
               applicationStatus: { type: "string", example: "pending" },
             },
             required: ["id", "username", "role", "accountStatus", "applicationStatus"],
+          }),
+          400: errorResponse,
+          401: errorResponse,
+          409: errorResponse,
+          503: errorResponse,
+        },
+      },
+    },
+    "/api/auth/microsoft/student-registration": {
+      post: {
+        tags: ["Registro"],
+        summary: "Crear un perfil de estudiante con correo verificado por Microsoft",
+        description: "Crea una cuenta pendiente de aprobación administrativa. La matrícula se captura para revisión y no se valida contra una fuente oficial automáticamente.",
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: { $ref: "#/components/schemas/MicrosoftStudentRegistrationRequest" },
+            },
+          },
+        },
+        responses: {
+          201: jsonResponse("Perfil de estudiante creado y pendiente de aprobación", {
+            type: "object",
+            properties: {
+              id: { type: "integer" },
+              username: { type: "string" },
+              role: { type: "string", example: "alumno" },
+              accountStatus: { type: "string", example: "pending" },
+              studentNumberVerificationStatus: { type: "string", example: "pending" },
+            },
+            required: ["id", "username", "role", "accountStatus", "studentNumberVerificationStatus"],
           }),
           400: errorResponse,
           401: errorResponse,
@@ -325,6 +361,89 @@ const openapi = {
           404: errorResponse,
           503: errorResponse,
         },
+      },
+    },
+    "/api/tutor-management/week": {
+      get: {
+        tags: ["Gestión de tutorías"],
+        summary: "Consultar calendario, solicitudes y alumnos aceptados de una semana",
+        security: [{ sessionCookie: [] }],
+        parameters: [{
+          name: "weekStart",
+          in: "query",
+          required: true,
+          schema: { type: "string", format: "date", description: "Lunes de la semana" },
+        }],
+        responses: {
+          200: jsonResponse("Resumen semanal del tutor", { type: "object" }),
+          400: errorResponse,
+          401: errorResponse,
+          403: errorResponse,
+        },
+      },
+    },
+    "/api/tutor-management/availability": {
+      put: {
+        tags: ["Gestión de tutorías"],
+        summary: "Guardar disponibilidad semanal",
+        security: [{ sessionCookie: [] }],
+        requestBody: {
+          required: true,
+          content: { "application/json": { schema: { $ref: "#/components/schemas/TutorAvailabilityUpdate" } } },
+        },
+        responses: { 200: jsonResponse("Disponibilidad guardada", { type: "object" }), 400: errorResponse, 401: errorResponse, 403: errorResponse, 409: errorResponse },
+      },
+    },
+    "/api/tutor-management/requests/{id}": {
+      patch: {
+        tags: ["Gestión de tutorías"],
+        summary: "Aceptar o rechazar una solicitud de tutoría",
+        security: [{ sessionCookie: [] }],
+        parameters: [{ name: "id", in: "path", required: true, schema: { type: "integer", minimum: 1 } }],
+        requestBody: {
+          required: true,
+          content: { "application/json": { schema: { type: "object", properties: { decision: { type: "string", enum: ["accepted", "rejected"] } }, required: ["decision"] } } },
+        },
+        responses: { 200: jsonResponse("Solicitud actualizada", { type: "object" }), 400: errorResponse, 401: errorResponse, 403: errorResponse, 404: errorResponse, 409: errorResponse },
+      },
+    },
+    "/api/tutor-management/students/{id}/schedule": {
+      put: {
+        tags: ["Gestión de tutorías"],
+        summary: "Programar o reprogramar una tutoría aceptada",
+        security: [{ sessionCookie: [] }],
+        parameters: [{ name: "id", in: "path", required: true, schema: { type: "integer", minimum: 1 } }],
+        requestBody: {
+          required: true,
+          content: { "application/json": { schema: { $ref: "#/components/schemas/TutorSessionSchedule" } } },
+        },
+        responses: { 200: jsonResponse("Tutoría programada", { type: "object" }), 400: errorResponse, 401: errorResponse, 403: errorResponse, 404: errorResponse, 409: errorResponse },
+      },
+    },
+    "/api/tutor-management/sessions/{id}/status": {
+      patch: {
+        tags: ["Gestión de tutorías"],
+        summary: "Marcar una tutoría como completada o cancelada",
+        security: [{ sessionCookie: [] }],
+        parameters: [{ name: "id", in: "path", required: true, schema: { type: "integer", minimum: 1 } }],
+        requestBody: {
+          required: true,
+          content: { "application/json": { schema: { type: "object", properties: { status: { type: "string", enum: ["completed", "cancelled"] } }, required: ["status"] } } },
+        },
+        responses: { 200: jsonResponse("Estado actualizado", { type: "object" }), 400: errorResponse, 401: errorResponse, 403: errorResponse, 404: errorResponse },
+      },
+    },
+    "/api/tutor-management/requests": {
+      post: {
+        tags: ["Gestión de tutorías"],
+        summary: "Enviar una solicitud de tutoría a un tutor disponible",
+        description: "Requiere sesión de estudiante; el servicio valida la semana, materia, turno y horario preferido.",
+        security: [{ sessionCookie: [] }],
+        requestBody: {
+          required: true,
+          content: { "application/json": { schema: { $ref: "#/components/schemas/TutorRequestSubmission" } } },
+        },
+        responses: { 201: jsonResponse("Solicitud enviada", { type: "object" }), 400: errorResponse, 401: errorResponse, 403: errorResponse, 404: errorResponse },
       },
     },
     "/api/admin/approvals/pending": {
@@ -463,6 +582,21 @@ const openapi = {
           "currentSemester", "average", "subjectIds", "experience",
         ],
       },
+      MicrosoftStudentRegistrationRequest: {
+        type: "object",
+        properties: {
+          username: { type: "string", minLength: 3, maxLength: 80, pattern: "^\\p{L}+$" },
+          firstName: { type: "string", maxLength: 80, pattern: "^\\p{L}+$" },
+          lastName: { type: "string", maxLength: 120, pattern: "^\\p{L}+$" },
+          studentNumber: { type: "string", pattern: "^[0-9]{11}$" },
+          careerId: { type: "integer", minimum: 1 },
+          campusId: { type: "integer", minimum: 1 },
+          phone: { type: "string", pattern: "^[0-9]{11}$" },
+        },
+        required: [
+          "username", "firstName", "lastName", "studentNumber", "careerId", "campusId", "phone",
+        ],
+      },
       Tutor: {
         type: "object",
         properties: {
@@ -475,6 +609,46 @@ const openapi = {
           is_available: { type: "boolean" },
         },
         required: ["id", "name", "subject", "experience", "rating", "is_available"],
+      },
+      TutorAvailabilityUpdate: {
+        type: "object",
+        properties: {
+          weekStart: { type: "string", format: "date", description: "Lunes de la semana configurada" },
+          slots: {
+            type: "array",
+            items: {
+              type: "object",
+              properties: {
+                weekday: { type: "integer", minimum: 1, maximum: 5 },
+                startHour: { type: "integer", minimum: 7, maximum: 19 },
+              },
+              required: ["weekday", "startHour"],
+            },
+          },
+        },
+        required: ["weekStart", "slots"],
+      },
+      TutorSessionSchedule: {
+        type: "object",
+        properties: {
+          weekStart: { type: "string", format: "date" },
+          weekday: { type: "integer", minimum: 1, maximum: 5 },
+          startHour: { type: "integer", minimum: 7, maximum: 19 },
+        },
+        required: ["weekStart", "weekday", "startHour"],
+      },
+      TutorRequestSubmission: {
+        type: "object",
+        properties: {
+          tutorId: { type: "integer", minimum: 1 },
+          subject: { type: "string", maxLength: 120 },
+          topic: { type: "string", minLength: 1, maxLength: 500 },
+          schoolShift: { type: "string", enum: ["matutino", "vespertino", "nocturno"] },
+          weekStart: { type: "string", format: "date" },
+          preferredWeekday: { type: "integer", minimum: 1, maximum: 5, nullable: true },
+          preferredStartHour: { type: "integer", minimum: 7, maximum: 19, nullable: true },
+        },
+        required: ["tutorId", "subject", "topic", "schoolShift", "weekStart"],
       },
       PendingApproval: {
         type: "object",

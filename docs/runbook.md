@@ -161,10 +161,11 @@ vuelve a ejecutar `npm --prefix backend run db:migrate`.
 Comprueba que las cuatro variables `MICROSOFT_*` están configuradas en el
 backend y que `MICROSOFT_REDIRECT_URI` coincide exactamente con la URI Web
 registrada en Microsoft Entra. El acceso institucional es para estudiantes y
-tutores con cuenta `@ues.mx`. Un estudiante no registrado no puede crear una
-cuenta desde la aplicación. Un tutor puede iniciar una solicitud; su cuenta
-requiere aprobación administrativa. La contraseña institucional se escribe
-solo en Microsoft, nunca en EduMatch.
+tutores con cuenta `@ues.mx`. Un estudiante nuevo puede validar su correo con
+Microsoft y completar el formulario de perfil; su cuenta queda pendiente de
+aprobación administrativa. Un tutor también puede iniciar una solicitud y
+requiere aprobación. La contraseña institucional se escribe solo en Microsoft,
+nunca en EduMatch.
 
 ### No hay materias disponibles para el registro de tutores
 

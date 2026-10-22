@@ -3,6 +3,7 @@ import AdminLoginPage from "./AdminLoginPage.jsx";
 import Dashboard from "./Dashboard.jsx";
 import LoginPage from "./LoginPage.jsx";
 import { API_URL, readApiResponse } from "./api.js";
+import StudentRegistrationPage from "./StudentRegistrationPage.jsx";
 import TutorRegistrationPage from "./TutorRegistrationPage.jsx";
 import WelcomePage from "./WelcomePage.jsx";
 
@@ -13,7 +14,7 @@ function App() {
   const [institutionalLoginLoading, setInstitutionalLoginLoading] = useState(false);
   const [showLogin, setShowLogin] = useState(false);
   const [selectedRole, setSelectedRole] = useState("alumno");
-  const [tutorRegistration, setTutorRegistration] = useState(false);
+  const [registrationRole, setRegistrationRole] = useState(null);
   const adminLoginMode = window.location.pathname === "/admin-login";
 
   useEffect(() => {
@@ -24,16 +25,17 @@ function App() {
       unavailable: "El inicio con cuenta institucional no está configurado todavía.",
       failed: "No se pudo completar el inicio de sesión institucional. Inténtalo de nuevo.",
       conflict: "La cuenta institucional no coincide con un perfil elegible.",
-      not_registered: "El usuario no está registrado",
+      not_registered: "No encontramos un perfil para esta cuenta. Inicia el proceso con Microsoft para completar tu registro.",
       pending: "Tu cuenta está pendiente de aprobación. Recibirás acceso cuando un administrador la apruebe.",
       disabled: "La cuenta no está habilitada para iniciar sesión.",
       logout_first: "Cierra la sesión actual antes de iniciar con otra cuenta institucional.",
       exchange_failed: "Microsoft no pudo validar la cuenta institucional. Inténtalo nuevamente.",
     };
 
-    if (status === "tutor_register") {
-      setTutorRegistration(true);
-      setSelectedRole("tutor");
+    if (status === "student_register" || status === "tutor_register") {
+      const role = status === "student_register" ? "alumno" : "tutor";
+      setRegistrationRole(role);
+      setSelectedRole(role);
     } else if (status && statusMessages[status]) {
       setAuthError(statusMessages[status]);
       setSelectedRole(role);
@@ -76,7 +78,7 @@ function App() {
       setUser(null);
       setSelectedRole("alumno");
       setShowLogin(false);
-      setTutorRegistration(false);
+      setRegistrationRole(null);
     } catch (requestError) {
       setAuthError(requestError.message);
     }
@@ -134,9 +136,9 @@ function App() {
   };
 
   const returnToLogin = () => {
-    setTutorRegistration(false);
+    setRegistrationRole(null);
     window.history.replaceState({}, "", window.location.pathname);
-    setSelectedRole("tutor");
+    setSelectedRole(registrationRole || "alumno");
     setAuthError("");
     setShowLogin(true);
   };
@@ -156,7 +158,11 @@ function App() {
     );
   }
 
-  if (tutorRegistration) {
+  if (registrationRole === "alumno") {
+    return <StudentRegistrationPage onBackToLogin={returnToLogin} />;
+  }
+
+  if (registrationRole === "tutor") {
     return <TutorRegistrationPage onBackToLogin={returnToLogin} />;
   }
 
