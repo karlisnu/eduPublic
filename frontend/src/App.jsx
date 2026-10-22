@@ -10,6 +10,7 @@ function App() {
   const [user, setUser] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [authError, setAuthError] = useState("");
+  const [institutionalLoginLoading, setInstitutionalLoginLoading] = useState(false);
   const [showLogin, setShowLogin] = useState(false);
   const [selectedRole, setSelectedRole] = useState("alumno");
   const [tutorRegistration, setTutorRegistration] = useState(false);
@@ -45,12 +46,17 @@ function App() {
       .then(async (response) => {
         if (response.status === 401) return null;
         const data = await readApiResponse(response);
-        if (!response.ok) throw new Error(data.error || "No se pudo restaurar la sesión.");
+        if (!response.ok) {
+          throw new Error(data.error ||
+            "No se pudo restaurar la sesión. Verifica que el backend y MySQL estén activos.");
+        }
         return data;
       })
       .then(setUser)
       .catch((requestError) => {
-        setAuthError(requestError.message);
+        setAuthError(requestError instanceof TypeError
+          ? "No se pudo conectar con EduMatch. Verifica que el backend y MySQL estén activos."
+          : requestError.message);
         setShowLogin(true);
       })
       .finally(() => setAuthLoading(false));
@@ -91,6 +97,28 @@ function App() {
       setUser(data);
     } catch (requestError) {
       setAuthError(requestError.message);
+    }
+  };
+
+  const handleInstitutionalLogin = async (role) => {
+    setAuthError("");
+    setInstitutionalLoginLoading(true);
+    try {
+      const response = await fetch(`${API_URL}/api/health`, { credentials: "include" });
+      const data = await readApiResponse(response);
+      if (!response.ok) {
+        throw new Error(data.error ||
+          "No se pudo conectar con la API de EduMatch. Verifica que el backend y MySQL estén activos.");
+      }
+      window.location.assign(
+        `${API_URL}/api/auth/microsoft?role=${encodeURIComponent(role)}`,
+      );
+    } catch (requestError) {
+      setAuthError(requestError instanceof TypeError
+        ? "No se pudo conectar con el servidor de EduMatch. Verifica que el backend y MySQL estén activos."
+        : requestError.message);
+    } finally {
+      setInstitutionalLoginLoading(false);
     }
   };
 
@@ -151,6 +179,8 @@ function App() {
       selectedRole={selectedRole}
       onSelectRole={handleSelectRole}
       authError={authError}
+      institutionalLoginLoading={institutionalLoginLoading}
+      onInstitutionalLogin={handleInstitutionalLogin}
       onBackToWelcome={() => {
         setShowLogin(false);
         setAuthError("");

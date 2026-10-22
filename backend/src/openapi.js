@@ -383,6 +383,31 @@ const openapi = {
         },
       },
     },
+    "/api/admin/users/{id}": {
+      delete: {
+        tags: ["Administración"],
+        summary: "Eliminar un usuario",
+        description: "Solo administradores pueden eliminar usuarios. No es posible eliminar la cuenta propia ni usuarios con registros relacionados que deban conservarse.",
+        security: [{ sessionCookie: [] }],
+        parameters: [
+          {
+            name: "id",
+            in: "path",
+            required: true,
+            schema: { type: "integer", minimum: 1 },
+          },
+        ],
+        responses: {
+          204: { description: "Usuario eliminado" },
+          400: errorResponse,
+          401: errorResponse,
+          403: errorResponse,
+          404: errorResponse,
+          409: errorResponse,
+          503: errorResponse,
+        },
+      },
+    },
   },
   components: {
     securitySchemes: {

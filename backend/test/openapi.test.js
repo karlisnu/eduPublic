@@ -24,6 +24,7 @@ test("OpenAPI document describes every current API endpoint", () => {
       "GET /api/session",
       "GET /api/tutors",
       "GET /api/tutors/{id}",
+      "DELETE /api/admin/users/{id}",
       "PATCH /api/admin/users/{id}/approval",
       "POST /api/auth/microsoft/registration",
       "POST /api/login",
@@ -47,6 +48,7 @@ test("OpenAPI secures protected routes with the existing session cookie", () => 
     "/api/tutors/{id}",
     "/api/admin/approvals/pending",
     "/api/admin/users/{id}/approval",
+    "/api/admin/users/{id}",
   ]) {
     const operation = Object.values(openapi.paths[path])[0];
     assert.deepEqual(operation.security, [{ sessionCookie: [] }], `${path} should require a session`);
@@ -54,6 +56,11 @@ test("OpenAPI secures protected routes with the existing session cookie", () => 
 
   assert.equal(openapi.paths["/api/users"].post.security, undefined);
   assert.equal(openapi.paths["/api/admin/approvals/pending"].get.security[0].sessionCookie.length, 0);
+  assert.equal(
+    openapi.paths["/api/admin/users/{id}"].delete.description.includes("Solo administradores"),
+    true,
+  );
+  assert.equal(openapi.paths["/api/admin/users/{id}"].delete.responses[409] !== undefined, true);
 });
 
 test("authentication schemas document Microsoft tutor signup and admin-only password login", () => {

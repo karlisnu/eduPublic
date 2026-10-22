@@ -1,9 +1,9 @@
-import { API_URL } from "./api.js";
-
 function LoginPage({
   selectedRole,
   onSelectRole,
   authError,
+  institutionalLoginLoading,
+  onInstitutionalLogin,
   onBackToWelcome,
 }) {
   return (
@@ -52,12 +52,16 @@ function LoginPage({
                     registro público.
                   </p>
                   {authError && <p className="login-error" role="alert">{authError}</p>}
-                  <a
+                  <button
+                    type="button"
                     className="microsoft-login-button"
-                    href={`${API_URL}/api/auth/microsoft?role=alumno`}
+                    disabled={institutionalLoginLoading}
+                    onClick={() => onInstitutionalLogin("alumno")}
                   >
-                    Continuar con cuenta institucional UES
-                  </a>
+                    {institutionalLoginLoading
+                      ? "Conectando con EduMatch..."
+                      : "Continuar con cuenta institucional UES"}
+                  </button>
                 </>
               ) : (
                 <>
@@ -67,18 +71,26 @@ function LoginPage({
                     el correo.
                   </p>
                   {authError && <p className="login-error" role="alert">{authError}</p>}
-                  <a
+                  <button
+                    type="button"
                     className="microsoft-login-button"
-                    href={`${API_URL}/api/auth/microsoft?role=tutor`}
+                    disabled={institutionalLoginLoading}
+                    onClick={() => onInstitutionalLogin("tutor")}
                   >
-                    Iniciar sesión con Microsoft
-                  </a>
-                  <a
+                    {institutionalLoginLoading
+                      ? "Conectando con EduMatch..."
+                      : "Iniciar sesión con Microsoft"}
+                  </button>
+                  <button
+                    type="button"
                     className="tutor-create-account"
-                    href={`${API_URL}/api/auth/microsoft?role=tutor`}
+                    disabled={institutionalLoginLoading}
+                    onClick={() => onInstitutionalLogin("tutor")}
                   >
-                    Crear cuenta de tutor
-                  </a>
+                    {institutionalLoginLoading
+                      ? "Conectando con EduMatch..."
+                      : "Crear cuenta de tutor"}
+                  </button>
                 </>
               )}
             </div>

@@ -205,27 +205,38 @@ textarea.dark-input { font: inherit; resize: vertical; }
   border: 1px solid #8a9498;
   border-radius: 12px;
   color: #1d2d34;
+  cursor: pointer;
   display: block;
   font-weight: 700;
+  font-family: inherit;
   margin-top: 16px;
   padding: 1rem 1.2rem;
   text-align: center;
   text-decoration: none;
+  width: 100%;
 }
 .microsoft-login-button:hover,
 .microsoft-login-button:focus-visible {
   background: #f4f6f7;
+}
+.microsoft-login-button:disabled,
+.tutor-create-account:disabled {
+  cursor: wait;
+  opacity: 0.7;
 }
 .tutor-create-account {
   background: transparent;
   border: 1px solid #e88c00;
   border-radius: 12px;
   color: #a65700;
+  cursor: pointer;
   display: block;
   font-weight: 700;
+  font-family: inherit;
   margin-top: 10px;
   padding: 1rem 1.2rem;
   text-align: center;
+  width: 100%;
 }
 .tutor-create-account:hover,
 .tutor-create-account:focus-visible { background: #fff2dd; }

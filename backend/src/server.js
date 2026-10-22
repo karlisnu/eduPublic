@@ -170,6 +170,7 @@ app.get("/", async (req, res) => {
       "GET /api/tutors",
       "GET /api/admin/approvals/pending",
       "PATCH /api/admin/users/:id/approval",
+      "DELETE /api/admin/users/:id",
     ],
     database: "mysql",
   });
@@ -730,6 +731,59 @@ app.patch(
         transactionStarted = false;
       }
       next(error);
+    } finally {
+      if (connection) connection.release();
+    }
+  },
+);
+
+app.delete(
+  "/api/admin/users/:id",
+  requireAuthentication,
+  requireRoles("admin"),
+  async (req, res, next) => {
+    const userId = Number(req.params.id);
+
+    if (!Number.isSafeInteger(userId) || userId < 1) {
+      return res.status(400).json({ error: "El id de usuario no es válido" });
+    }
+    if (userId === req.auth.id) {
+      return res.status(403).json({ error: "No puedes eliminar tu propia cuenta" });
+    }
+
+    let connection;
+    let transactionStarted = false;
+    try {
+      await requireDatabase();
+      connection = await pool.getConnection();
+      await connection.beginTransaction();
+      transactionStarted = true;
+
+      const [users] = await connection.query(
+        "SELECT id FROM users WHERE id = ? FOR UPDATE",
+        [userId],
+      );
+      if (users.length === 0) {
+        await connection.rollback();
+        transactionStarted = false;
+        return res.status(404).json({ error: "Usuario no encontrado" });
+      }
+
+      await connection.query("DELETE FROM users WHERE id = ?", [userId]);
+      await connection.commit();
+      transactionStarted = false;
+      return res.status(204).end();
+    } catch (error) {
+      if (connection && transactionStarted) {
+        await connection.rollback();
+        transactionStarted = false;
+      }
+      if (error.code === "ER_ROW_IS_REFERENCED_2") {
+        return res.status(409).json({
+          error: "No se puede eliminar el usuario porque tiene registros relacionados que deben conservarse",
+        });
+      }
+      return next(error);
     } finally {
       if (connection) connection.release();
     }
