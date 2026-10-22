@@ -205,27 +205,38 @@ textarea.dark-input { font: inherit; resize: vertical; }
   border: 1px solid #8a9498;
   border-radius: 12px;
   color: #1d2d34;
+  cursor: pointer;
   display: block;
   font-weight: 700;
+  font-family: inherit;
   margin-top: 16px;
   padding: 1rem 1.2rem;
   text-align: center;
   text-decoration: none;
+  width: 100%;
 }
 .microsoft-login-button:hover,
 .microsoft-login-button:focus-visible {
   background: #f4f6f7;
+}
+.microsoft-login-button:disabled,
+.tutor-create-account:disabled {
+  cursor: wait;
+  opacity: 0.7;
 }
 .tutor-create-account {
   background: transparent;
   border: 1px solid #e88c00;
   border-radius: 12px;
   color: #a65700;
+  cursor: pointer;
   display: block;
   font-weight: 700;
+  font-family: inherit;
   margin-top: 10px;
   padding: 1rem 1.2rem;
   text-align: center;
+  width: 100%;
 }
 .tutor-create-account:hover,
 .tutor-create-account:focus-visible { background: #fff2dd; }
@@ -336,6 +347,67 @@ h2 { font: 700 2rem 'Comfortaa', sans-serif; margin-bottom: 0; }
 .card-footer span:first-child { color: #b76d18; }
 .message { color: #718084; line-height: 1.6; }
 .error { color: #b13d32; }
+
+.tutor-management { margin: 26px auto 80px; max-width: 1180px; padding: 0 32px; }
+.tutor-page-heading { align-items: center; display: flex; gap: 24px; justify-content: space-between; margin: 0 0 26px; }
+.tutor-page-heading h1 { color: #1d2d34; font: 700 clamp(2rem, 4vw, 3rem) 'Comfortaa', sans-serif; margin: 0 0 10px; }
+.tutor-page-heading p:last-child, .management-hint { color: #647176; line-height: 1.55; margin-bottom: 0; }
+.week-switcher { align-items: center; background: #fff; border: 1px solid #e3d9c9; border-radius: 14px; display: flex; gap: 14px; padding: 8px; white-space: nowrap; }
+.week-switcher strong { color: #1d2d34; font-size: .9rem; }
+.week-switcher button { background: #f7f2eb; border: 0; border-radius: 9px; color: #1d2d34; cursor: pointer; font-size: 1.15rem; height: 38px; width: 38px; }
+.management-alert { border-radius: 10px; margin: 14px 0; padding: 12px 16px; }
+.management-alert.success { background: #e6f4ec; color: #26714c; }
+.management-alert.error { background: #fce8e5; color: #a6392d; }
+.tutor-stats { display: grid; gap: 14px; grid-template-columns: repeat(3, 1fr); margin: 24px 0; }
+.tutor-stats article { background: #fff; border: 1px solid #e9e4dc; border-radius: 15px; display: grid; gap: 10px; padding: 20px; }
+.tutor-stats span { color: #647176; font-size: .85rem; }
+.tutor-stats strong { color: #1d2d34; font: 700 1.8rem 'Comfortaa', sans-serif; }
+.tutor-stats small { color: #879195; font: 600 .95rem 'Montserrat', sans-serif; }
+.management-section { background: #fff; border: 1px solid #ebe5dc; border-radius: 18px; margin: 20px 0; padding: clamp(18px, 3vw, 30px); }
+.management-section .section-heading { margin-bottom: 14px; }
+.management-section h2 { font-size: clamp(1.35rem, 2.6vw, 1.8rem); }
+.management-primary, .management-secondary { border: 0; border-radius: 9px; cursor: pointer; font-size: .82rem; font-weight: 700; padding: 11px 15px; }
+.management-primary { background: #1d2d34; color: #fff; }
+.management-primary:hover { background: #334d57; }
+.management-primary:disabled { cursor: not-allowed; opacity: .55; }
+.management-secondary { background: #edf0f0; color: #1d2d34; }
+.management-secondary.danger { background: #fce8e5; color: #a6392d; }
+.calendar-legend { align-items: center; display: flex; flex-wrap: wrap; gap: 18px; margin: 18px 0; }
+.calendar-legend span { align-items: center; color: #647176; display: inline-flex; font-size: .78rem; gap: 7px; }
+.legend-dot { background: #fff; border: 1px solid #d9e0e1; border-radius: 50%; height: 11px; width: 11px; }
+.legend-dot.selected { background: #25805a; border-color: #25805a; }
+.legend-dot.occupied { background: #d8dee0; border-color: #c7d0d2; }
+.availability-calendar { display: grid; grid-template-columns: minmax(86px, 1fr) repeat(5, minmax(48px, 1fr)); overflow-x: auto; }
+.calendar-corner, .calendar-day { align-items: center; background: #f7f5f1; border-bottom: 1px solid #e6e1d9; color: #35464d; display: flex; font-size: .77rem; font-weight: 700; justify-content: center; min-height: 42px; }
+.calendar-corner { border-radius: 8px 0 0; }
+.calendar-hour { align-items: center; border-bottom: 1px solid #edf0f0; color: #718084; display: flex; font-size: .7rem; padding: 0 6px; }
+.calendar-slot { align-items: center; background: #fff; border: 0; border-bottom: 1px solid #edf0f0; border-left: 1px solid #edf0f0; color: #7d8a8e; cursor: pointer; display: flex; font-size: .86rem; justify-content: center; min-height: 42px; }
+.calendar-slot:hover:not(:disabled) { background: #fff4e4; color: #c3553e; }
+.calendar-slot.is-selected { background: #e8f5ed; color: #238052; }
+.calendar-slot.is-occupied { background: #e3e8e9; color: #627176; cursor: not-allowed; }
+.management-empty { background: #faf8f4; border-radius: 10px; color: #718084; padding: 18px; }
+.management-card-grid { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(255px, 1fr)); margin-top: 18px; }
+.management-card { border: 1px solid #e7e2da; border-radius: 14px; display: flex; flex-direction: column; gap: 10px; padding: 18px; }
+.management-card h3 { color: #1d2d34; font-size: 1.02rem; margin: 0; }
+.management-card > p { color: #647176; font-size: .88rem; line-height: 1.55; margin: 0; overflow-wrap: anywhere; }
+.management-card .subject { color: #c3553e; font-weight: 700; }
+.management-card-top { align-items: center; display: flex; justify-content: space-between; }
+.management-card-top time { color: #839094; font-size: .72rem; }
+.status-pill { background: #edf0f0; border-radius: 999px; color: #58666b; font-size: .68rem; font-weight: 700; padding: 6px 10px; }
+.status-pill.pending { background: #fff2da; color: #98600b; }
+.status-pill.scheduled { background: #e5f2ff; color: #266394; }
+.status-pill.completed { background: #e6f4ec; color: #26714c; }
+.status-pill.cancelled { background: #fce8e5; color: #a6392d; }
+.management-card-meta { border-top: 1px solid #f0ede8; color: #718084; display: flex; flex-wrap: wrap; font-size: .74rem; gap: 8px 14px; padding-top: 10px; }
+.management-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
+.management-filters { display: flex; flex-wrap: wrap; gap: 12px; }
+.management-filters label, .schedule-controls, .tutor-request-form label { color: #647176; display: grid; font-size: .78rem; font-weight: 600; gap: 6px; }
+.management-filters select, .schedule-controls select, .tutor-request-form select { background: #fff; border: 1px solid #d8d0c6; border-radius: 8px; color: #263238; min-height: 40px; padding: 8px 10px; }
+.schedule-controls { margin-top: auto; }
+.tutor-request-form { background: #faf8f4; border-radius: 12px; display: grid; gap: 12px; margin-top: 14px; padding: 14px; }
+.tutor-request-form textarea { min-height: 80px; }
+.tutor-request-form select { font-size: .82rem; }
+.request-tutor-button { margin-top: 4px; }
 
 .welcome-page {
   --welcome-bordo: #7d1f2d;
@@ -598,6 +670,18 @@ h2 { font: 700 2rem 'Comfortaa', sans-serif; margin-bottom: 0; }
   .approval-card { align-items: flex-start; flex-direction: column; }
   .section-heading { align-items: start; flex-direction: column; gap: 12px; }
   .tutor-card { grid-template-columns: 1fr; }
+  .tutor-management { margin-top: 10px; padding: 0 16px; }
+  .tutor-page-heading { align-items: flex-start; flex-direction: column; }
+  .week-switcher { align-self: stretch; justify-content: space-between; }
+  .tutor-stats { gap: 8px; }
+  .tutor-stats article { padding: 14px 10px; }
+  .tutor-stats span { font-size: .69rem; }
+  .tutor-stats strong { font-size: 1.3rem; }
+  .management-section .section-heading { align-items: flex-start; }
+  .availability-calendar { grid-template-columns: 75px repeat(5, minmax(48px, 1fr)); min-width: 370px; }
+  .calendar-hour { font-size: .63rem; }
+  .management-filters { display: grid; grid-template-columns: 1fr; }
+  .management-filters label, .management-filters select { width: 100%; }
   .login-page { padding: 20px; }
   .login-form-section { padding: 24px 20px; }
   .role-selection { flex-direction: column; }

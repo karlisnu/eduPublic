@@ -3,6 +3,7 @@ import AdminLoginPage from "./AdminLoginPage.jsx";
 import Dashboard from "./Dashboard.jsx";
 import LoginPage from "./LoginPage.jsx";
 import { API_URL, readApiResponse } from "./api.js";
+import StudentRegistrationPage from "./StudentRegistrationPage.jsx";
 import TutorRegistrationPage from "./TutorRegistrationPage.jsx";
 import WelcomePage from "./WelcomePage.jsx";
 
@@ -10,9 +11,10 @@ function App() {
   const [user, setUser] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [authError, setAuthError] = useState("");
+  const [institutionalLoginLoading, setInstitutionalLoginLoading] = useState(false);
   const [showLogin, setShowLogin] = useState(false);
   const [selectedRole, setSelectedRole] = useState("alumno");
-  const [tutorRegistration, setTutorRegistration] = useState(false);
+  const [registrationRole, setRegistrationRole] = useState(null);
   const adminLoginMode = window.location.pathname === "/admin-login";
 
   useEffect(() => {
@@ -23,16 +25,17 @@ function App() {
       unavailable: "El inicio con cuenta institucional no está configurado todavía.",
       failed: "No se pudo completar el inicio de sesión institucional. Inténtalo de nuevo.",
       conflict: "La cuenta institucional no coincide con un perfil elegible.",
-      not_registered: "El usuario no está registrado",
+      not_registered: "No encontramos un perfil para esta cuenta. Inicia el proceso con Microsoft para completar tu registro.",
       pending: "Tu cuenta está pendiente de aprobación. Recibirás acceso cuando un administrador la apruebe.",
       disabled: "La cuenta no está habilitada para iniciar sesión.",
       logout_first: "Cierra la sesión actual antes de iniciar con otra cuenta institucional.",
       exchange_failed: "Microsoft no pudo validar la cuenta institucional. Inténtalo nuevamente.",
     };
 
-    if (status === "tutor_register") {
-      setTutorRegistration(true);
-      setSelectedRole("tutor");
+    if (status === "student_register" || status === "tutor_register") {
+      const role = status === "student_register" ? "alumno" : "tutor";
+      setRegistrationRole(role);
+      setSelectedRole(role);
     } else if (status && statusMessages[status]) {
       setAuthError(statusMessages[status]);
       setSelectedRole(role);
@@ -45,12 +48,17 @@ function App() {
       .then(async (response) => {
         if (response.status === 401) return null;
         const data = await readApiResponse(response);
-        if (!response.ok) throw new Error(data.error || "No se pudo restaurar la sesión.");
+        if (!response.ok) {
+          throw new Error(data.error ||
+            "No se pudo restaurar la sesión. Verifica que el backend y MySQL estén activos.");
+        }
         return data;
       })
       .then(setUser)
       .catch((requestError) => {
-        setAuthError(requestError.message);
+        setAuthError(requestError instanceof TypeError
+          ? "No se pudo conectar con EduMatch. Verifica que el backend y MySQL estén activos."
+          : requestError.message);
         setShowLogin(true);
       })
       .finally(() => setAuthLoading(false));
@@ -70,7 +78,7 @@ function App() {
       setUser(null);
       setSelectedRole("alumno");
       setShowLogin(false);
-      setTutorRegistration(false);
+      setRegistrationRole(null);
     } catch (requestError) {
       setAuthError(requestError.message);
     }
@@ -83,7 +91,7 @@ function App() {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ identifier, password, role: "admin" }),
+        body: JSON.stringify({ identifier, password }),
       });
       const data = await readApiResponse(response);
       if (!response.ok) throw new Error(data.error || "No se pudo iniciar sesión.");
@@ -91,6 +99,28 @@ function App() {
       setUser(data);
     } catch (requestError) {
       setAuthError(requestError.message);
+    }
+  };
+
+  const handleInstitutionalLogin = async (role) => {
+    setAuthError("");
+    setInstitutionalLoginLoading(true);
+    try {
+      const response = await fetch(`${API_URL}/api/health`, { credentials: "include" });
+      const data = await readApiResponse(response);
+      if (!response.ok) {
+        throw new Error(data.error ||
+          "No se pudo conectar con la API de EduMatch. Verifica que el backend y MySQL estén activos.");
+      }
+      window.location.assign(
+        `${API_URL}/api/auth/microsoft?role=${encodeURIComponent(role)}`,
+      );
+    } catch (requestError) {
+      setAuthError(requestError instanceof TypeError
+        ? "No se pudo conectar con el servidor de EduMatch. Verifica que el backend y MySQL estén activos."
+        : requestError.message);
+    } finally {
+      setInstitutionalLoginLoading(false);
     }
   };
 
@@ -106,9 +136,9 @@ function App() {
   };
 
   const returnToLogin = () => {
-    setTutorRegistration(false);
+    setRegistrationRole(null);
     window.history.replaceState({}, "", window.location.pathname);
-    setSelectedRole("tutor");
+    setSelectedRole(registrationRole || "alumno");
     setAuthError("");
     setShowLogin(true);
   };
@@ -128,7 +158,11 @@ function App() {
     );
   }
 
-  if (tutorRegistration) {
+  if (registrationRole === "alumno") {
+    return <StudentRegistrationPage onBackToLogin={returnToLogin} />;
+  }
+
+  if (registrationRole === "tutor") {
     return <TutorRegistrationPage onBackToLogin={returnToLogin} />;
   }
 
@@ -151,6 +185,8 @@ function App() {
       selectedRole={selectedRole}
       onSelectRole={handleSelectRole}
       authError={authError}
+      institutionalLoginLoading={institutionalLoginLoading}
+      onInstitutionalLogin={handleInstitutionalLogin}
       onBackToWelcome={() => {
         setShowLogin(false);
         setAuthError("");

@@ -5,6 +5,8 @@ const path = require("path");
 require("dotenv").config({ path: path.join(__dirname, "../.env") });
 const { pool } = require("./db");
 const openapi = require("./openapi");
+const { AdminLoginRequestDto, AdminLoginResponseDto } = require("./dtos/admin-login.dto");
+const { createTutorManagementRouter } = require("./routes/tutor-management.routes");
 const {
   SESSION_MAX_AGE_SECONDS,
   clearSessionCookie,
@@ -125,6 +127,15 @@ const prepareDatabase = async () => {
     career_subjects: ["career_id", "subject_id", "semester_number"],
     tutor_subjects: ["tutor_id", "subject_id"],
     tutor_ratings: ["tutor_id", "rating"],
+    tutor_availability: ["tutor_id", "week_start", "weekday", "start_hour"],
+    tutoring_requests: [
+      "id", "tutor_id", "student_id", "week_start", "subject", "topic", "school_shift",
+      "preferred_weekday", "preferred_start_hour", "status", "submitted_at",
+    ],
+    tutor_weekly_students: ["id", "tutor_id", "student_id", "week_start", "request_id"],
+    tutor_sessions: [
+      "id", "weekly_student_id", "tutor_id", "week_start", "weekday", "start_hour", "status",
+    ],
   };
   const [tableRows] = await pool.query("SHOW TABLES");
   const existingTables = new Set(tableRows.map((row) => Object.values(row)[0]));
@@ -164,11 +175,19 @@ app.get("/", async (req, res) => {
       "GET /api/auth/microsoft/callback",
       "GET /api/auth/microsoft/registration",
       "POST /api/auth/microsoft/registration",
+      "POST /api/auth/microsoft/student-registration",
       "GET /api/session",
       "POST /api/logout",
       "GET /api/tutors",
+      "GET /api/tutor-management/week",
+      "PUT /api/tutor-management/availability",
+      "PATCH /api/tutor-management/requests/:id",
+      "PUT /api/tutor-management/students/:id/schedule",
+      "PATCH /api/tutor-management/sessions/:id/status",
+      "POST /api/tutor-management/requests",
       "GET /api/admin/approvals/pending",
       "PATCH /api/admin/users/:id/approval",
+      "DELETE /api/admin/users/:id",
     ],
     database: "mysql",
   });
@@ -312,22 +331,22 @@ app.get("/api/auth/microsoft/callback", async (req, res, next) => {
       return res.redirect(frontendOrigin);
     }
 
-    if (transaction.role === "alumno") return fail("not_registered");
-
     const registrationToken = randomToken();
     await pool.query("DELETE FROM microsoft_registration_sessions WHERE expires_at <= NOW()");
     await pool.query(
       "DELETE FROM microsoft_registration_sessions WHERE microsoft_object_id = ?",
       [identity.objectId],
     );
+    const registrationRole = transaction.role;
     await pool.query(
       `INSERT INTO microsoft_registration_sessions
         (token_hash, email, microsoft_object_id, role, expires_at)
-       VALUES (?, ?, ?, 'tutor', ?)`,
+       VALUES (?, ?, ?, ?, ?)`,
       [
         hashSessionToken(registrationToken),
         identity.email,
         identity.objectId,
+        registrationRole,
         new Date(Date.now() + 15 * 60 * 1000),
       ],
     );
@@ -335,7 +354,10 @@ app.get("/api/auth/microsoft/callback", async (req, res, next) => {
       clearAuthTransactionCookie(),
       registrationCookie(registrationToken),
     ]);
-    return res.redirect(`${frontendOrigin}/?institutional=tutor_register&role=tutor`);
+    const registrationStatus = registrationRole === "alumno" ? "student_register" : "tutor_register";
+    return res.redirect(
+      `${frontendOrigin}/?institutional=${registrationStatus}&role=${registrationRole}`,
+    );
   } catch (error) {
     return next(error);
   }
@@ -348,15 +370,15 @@ app.get("/api/auth/microsoft/registration", async (req, res, next) => {
   try {
     await requireDatabase();
     const [rows] = await pool.query(
-      `SELECT email FROM microsoft_registration_sessions
-       WHERE token_hash = ? AND expires_at > NOW() AND role = 'tutor'
+      `SELECT email, role FROM microsoft_registration_sessions
+       WHERE token_hash = ? AND expires_at > NOW()
        LIMIT 1`,
       [hashSessionToken(token)],
     );
     if (rows.length === 0) {
       return res.status(401).json({ error: "La verificación institucional expiró; inicia sesión nuevamente" });
     }
-    return res.json({ email: rows[0].email });
+    return res.json({ email: rows[0].email, role: rows[0].role });
   } catch (error) {
     return next(error);
   }
@@ -514,6 +536,129 @@ app.post("/api/auth/microsoft/registration", async (req, res, next) => {
   }
 });
 
+app.post("/api/auth/microsoft/student-registration", async (req, res, next) => {
+  const token = readRegistrationToken(req);
+  if (!token) {
+    return res.status(401).json({ error: "La verificación institucional expiró; inicia sesión nuevamente" });
+  }
+
+  const body = req.body && typeof req.body === "object" ? req.body : {};
+  const username = typeof body.username === "string" ? body.username.trim() : "";
+  const firstName = typeof body.firstName === "string" ? body.firstName.trim() : "";
+  const lastName = typeof body.lastName === "string" ? body.lastName.trim() : "";
+  const studentNumber = typeof body.studentNumber === "string" ? body.studentNumber : "";
+  const careerId = typeof body.careerId === "number" ? body.careerId : Number.NaN;
+  const campusId = typeof body.campusId === "number" ? body.campusId : Number.NaN;
+  const phone = typeof body.phone === "string" ? body.phone : "";
+  const validName = (value, maxLength) =>
+    value.length > 0 && value.length <= maxLength && /^\p{L}+$/u.test(value);
+
+  if (username.length < 3 || username.length > 80 || !/^\p{L}+$/u.test(username) ||
+      !validName(firstName, 80) || !validName(lastName, 120)) {
+    return res.status(400).json({ error: "Usuario, nombre o apellido tienen un formato inválido" });
+  }
+  if (!/^\d{11}$/.test(studentNumber) || !/^\d{11}$/.test(phone)) {
+    return res.status(400).json({
+      error: "La matrícula y el teléfono deben tener exactamente 11 dígitos",
+    });
+  }
+  if (!Number.isSafeInteger(careerId) || careerId < 1 ||
+      !Number.isSafeInteger(campusId) || campusId < 1) {
+    return res.status(400).json({ error: "Selecciona una carrera y un campus válidos" });
+  }
+
+  let connection;
+  let transactionStarted = false;
+  try {
+    await requireDatabase();
+    connection = await pool.getConnection();
+    await connection.beginTransaction();
+    transactionStarted = true;
+
+    const [sessions] = await connection.query(
+      `SELECT id, email, microsoft_object_id FROM microsoft_registration_sessions
+       WHERE token_hash = ? AND expires_at > NOW() AND role = 'alumno'
+       FOR UPDATE`,
+      [hashSessionToken(token)],
+    );
+    const registration = sessions[0];
+    if (!registration) {
+      await connection.rollback();
+      transactionStarted = false;
+      return res.status(401).json({ error: "La verificación institucional expiró; inicia sesión nuevamente" });
+    }
+
+    const [catalogEntries] = await connection.query(
+      `SELECT
+         (SELECT COUNT(*) FROM careers WHERE id = ? AND is_active = TRUE) AS career_count,
+         (SELECT COUNT(*) FROM campuses WHERE id = ? AND is_active = TRUE) AS campus_count`,
+      [careerId, campusId],
+    );
+    if (catalogEntries[0].career_count !== 1 || catalogEntries[0].campus_count !== 1) {
+      await connection.rollback();
+      transactionStarted = false;
+      return res.status(400).json({ error: "La carrera o el campus no están activos en el catálogo" });
+    }
+
+    const [existingUsers] = await connection.query(
+      "SELECT id FROM users WHERE email = ? OR microsoft_object_id = ? OR login_identifier = ? LIMIT 1",
+      [registration.email, registration.microsoft_object_id, studentNumber],
+    );
+    if (existingUsers.length > 0) {
+      await connection.rollback();
+      transactionStarted = false;
+      return res.status(409).json({ error: "Esta cuenta institucional o matrícula ya está vinculada a un perfil" });
+    }
+
+    const [userResult] = await connection.query(
+      `INSERT INTO users
+        (username, login_identifier, email, password_hash, microsoft_object_id, role, account_status)
+       VALUES (?, ?, ?, NULL, ?, 'alumno', 'pending')`,
+      [username, studentNumber, registration.email, registration.microsoft_object_id],
+    );
+    await connection.query(
+      `INSERT INTO student_profiles
+        (user_id, first_name, last_name, student_number, career_id, campus_id, phone,
+         student_number_verification_status)
+       VALUES (?, ?, ?, ?, ?, ?, ?, 'pending')`,
+      [
+        userResult.insertId,
+        firstName,
+        lastName,
+        studentNumber,
+        careerId,
+        campusId,
+        phone,
+      ],
+    );
+    await connection.query(
+      "DELETE FROM microsoft_registration_sessions WHERE id = ?",
+      [registration.id],
+    );
+    await connection.commit();
+    transactionStarted = false;
+    res.setHeader("Set-Cookie", clearRegistrationCookie());
+    return res.status(201).json({
+      id: userResult.insertId,
+      username,
+      role: "alumno",
+      accountStatus: "pending",
+      studentNumberVerificationStatus: "pending",
+    });
+  } catch (error) {
+    if (connection && transactionStarted) {
+      await connection.rollback();
+      transactionStarted = false;
+    }
+    if (error.code === "ER_DUP_ENTRY") {
+      return res.status(409).json({ error: "La matrícula, el usuario o el correo ya están registrados" });
+    }
+    return next(error);
+  } finally {
+    if (connection) connection.release();
+  }
+});
+
 app.get("/api/catalogs/tutor-subjects", async (req, res, next) => {
   const careerId = Number(req.query.careerId);
   const currentSemester = Number(req.query.currentSemester);
@@ -564,25 +709,11 @@ app.get("/api/catalogs", async (req, res, next) => {
 });
 
 app.post("/api/login", async (req, res, next) => {
-  const body = req.body && typeof req.body === "object" ? req.body : {};
-  const identifier = typeof body.username === "string"
-    ? body.username.trim()
-    : typeof body.identifier === "string"
-      ? body.identifier.trim()
-      : "";
-  const password = typeof body.password === "string" ? body.password : "";
-  const role = typeof body.role === "string" ? body.role : "";
-
-  if (!identifier || !password || !role) {
-    return res.status(400).json({ error: "El usuario y la contraseña administrativos son obligatorios" });
-  }
-  if (!["alumno", "tutor", "admin"].includes(role)) {
-    return res.status(400).json({ error: "El tipo de cuenta no es válido" });
-  }
-  if (role !== "admin") {
-    return res.status(403).json({
-      error: "El acceso de estudiantes y tutores debe validarse exclusivamente con Microsoft",
-    });
+  let loginRequest;
+  try {
+    loginRequest = AdminLoginRequestDto.from(req.body);
+  } catch (error) {
+    return res.status(400).json({ error: error.message });
   }
 
   try {
@@ -593,11 +724,11 @@ app.post("/api/login", async (req, res, next) => {
        FROM users
        WHERE (login_identifier = ? OR username = ? OR email = ?) AND role = 'admin'
        LIMIT 1`,
-      [identifier, identifier, identifier],
+      [loginRequest.identifier, loginRequest.identifier, loginRequest.identifier],
     );
     const [rows] = await query;
 
-    if (rows.length === 0 || !verifyPassword(password, rows[0].password_hash)) {
+    if (rows.length === 0 || !verifyPassword(loginRequest.password, rows[0].password_hash)) {
       return res.status(401).json({ error: "Usuario o contraseña incorrectos" });
     }
     if (rows[0].account_status !== "approved") {
@@ -611,7 +742,7 @@ app.post("/api/login", async (req, res, next) => {
       [rows[0].id, hashSessionToken(token), expiresAt],
     );
     res.setHeader("Set-Cookie", sessionCookie(token));
-    res.json({ id: rows[0].id, username: rows[0].username, role: rows[0].role });
+    res.json(new AdminLoginResponseDto(rows[0]));
   } catch (error) {
     next(error);
   }
@@ -643,12 +774,18 @@ app.get(
       await requireDatabase();
       const [rows] = await pool.query(
         `SELECT u.id, u.username, u.email, u.login_identifier, u.role, u.account_status,
-                tp.application_status, tp.first_name, tp.last_name,
+                tp.application_status,
+                COALESCE(tp.first_name, sp.first_name) AS first_name,
+                COALESCE(tp.last_name, sp.last_name) AS last_name,
                 tp.current_semester, tp.average, c.name AS career,
+                sp.student_number, sp.phone, cp.name AS campus,
+                sp.student_number_verification_status,
                 GROUP_CONCAT(DISTINCT s.name ORDER BY s.name SEPARATOR ', ') AS subjects
          FROM users u
          LEFT JOIN tutor_profiles tp ON tp.user_id = u.id
-         LEFT JOIN careers c ON c.id = tp.career_id
+         LEFT JOIN student_profiles sp ON sp.user_id = u.id
+         LEFT JOIN careers c ON c.id = COALESCE(tp.career_id, sp.career_id)
+         LEFT JOIN campuses cp ON cp.id = sp.campus_id
          LEFT JOIN tutor_subjects ts ON ts.tutor_id = tp.user_id
          LEFT JOIN subjects s ON s.id = ts.subject_id
          WHERE (u.role = 'alumno' AND u.account_status = 'pending')
@@ -656,7 +793,9 @@ app.get(
                 (u.account_status = 'pending' OR tp.application_status = 'pending'))
          GROUP BY u.id, u.username, u.email, u.login_identifier, u.role, u.account_status,
                   tp.application_status, tp.first_name, tp.last_name,
-                  tp.current_semester, tp.average, c.name, u.created_at
+                  tp.current_semester, tp.average, sp.first_name, sp.last_name,
+                  sp.student_number, sp.phone, sp.student_number_verification_status,
+                  cp.name, c.name, u.created_at
          ORDER BY u.created_at ASC`,
       );
       res.json(rows);
@@ -743,6 +882,59 @@ app.patch(
         transactionStarted = false;
       }
       next(error);
+    } finally {
+      if (connection) connection.release();
+    }
+  },
+);
+
+app.delete(
+  "/api/admin/users/:id",
+  requireAuthentication,
+  requireRoles("admin"),
+  async (req, res, next) => {
+    const userId = Number(req.params.id);
+
+    if (!Number.isSafeInteger(userId) || userId < 1) {
+      return res.status(400).json({ error: "El id de usuario no es válido" });
+    }
+    if (userId === req.auth.id) {
+      return res.status(403).json({ error: "No puedes eliminar tu propia cuenta" });
+    }
+
+    let connection;
+    let transactionStarted = false;
+    try {
+      await requireDatabase();
+      connection = await pool.getConnection();
+      await connection.beginTransaction();
+      transactionStarted = true;
+
+      const [users] = await connection.query(
+        "SELECT id FROM users WHERE id = ? FOR UPDATE",
+        [userId],
+      );
+      if (users.length === 0) {
+        await connection.rollback();
+        transactionStarted = false;
+        return res.status(404).json({ error: "Usuario no encontrado" });
+      }
+
+      await connection.query("DELETE FROM users WHERE id = ?", [userId]);
+      await connection.commit();
+      transactionStarted = false;
+      return res.status(204).end();
+    } catch (error) {
+      if (connection && transactionStarted) {
+        await connection.rollback();
+        transactionStarted = false;
+      }
+      if (error.code === "ER_ROW_IS_REFERENCED_2") {
+        return res.status(409).json({
+          error: "No se puede eliminar el usuario porque tiene registros relacionados que deben conservarse",
+        });
+      }
+      return next(error);
     } finally {
       if (connection) connection.release();
     }
@@ -840,6 +1032,11 @@ app.get("/api/tutors/:id", requireAuthentication, requireRoles("alumno"), async 
     next(error);
   }
 });
+
+app.use(
+  "/api/tutor-management",
+  createTutorManagementRouter({ pool, requireAuthentication, requireRoles }),
+);
 
 app.use((error, req, res, next) => {
   console.error(error);
