@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { API_URL, readApiResponse } from "./api.js";
+import { API_URL, requestApi } from "./api.js";
 
 const emptyProfile = {
   username: "",
@@ -27,21 +27,13 @@ function TutorRegistrationPage({ onBackToLogin }) {
   useEffect(() => {
     const controller = new AbortController();
     Promise.all([
-      fetch(`${API_URL}/api/auth/microsoft/registration`, {
+      requestApi(`${API_URL}/api/auth/microsoft/registration`, {
         credentials: "include",
         signal: controller.signal,
       }),
-      fetch(`${API_URL}/api/catalogs`, { signal: controller.signal }),
+      requestApi(`${API_URL}/api/catalogs`, { signal: controller.signal }),
     ])
-      .then(async ([registrationResponse, catalogsResponse]) => {
-        const registration = await readApiResponse(registrationResponse);
-        const catalogs = await readApiResponse(catalogsResponse);
-        if (!registrationResponse.ok) {
-          throw new Error(registration.error || "La verificación institucional expiró; inicia sesión nuevamente.");
-        }
-        if (!catalogsResponse.ok) {
-          throw new Error(catalogs.error || "No se pudieron cargar las carreras.");
-        }
+      .then(([{ data: registration }, { data: catalogs }]) => {
         setEmail(registration.email);
         setCareers(catalogs.careers);
       })
@@ -67,12 +59,8 @@ function TutorRegistrationPage({ onBackToLogin }) {
     setEligibleSubjects([]);
     setSubjectsLoading(true);
     setError("");
-    fetch(`${API_URL}/api/catalogs/tutor-subjects?${query}`, { signal: controller.signal })
-      .then(async (response) => {
-        const data = await readApiResponse(response);
-        if (!response.ok) throw new Error(data.error || "No se pudieron cargar las materias elegibles.");
-        return data;
-      })
+    requestApi(`${API_URL}/api/catalogs/tutor-subjects?${query}`, { signal: controller.signal })
+      .then(({ data }) => data)
       .then(setEligibleSubjects)
       .catch((requestError) => {
         if (requestError.name !== "AbortError") setError(requestError.message);
@@ -99,7 +87,7 @@ function TutorRegistrationPage({ onBackToLogin }) {
     event.preventDefault();
     setError("");
     try {
-      const response = await fetch(`${API_URL}/api/auth/microsoft/registration`, {
+      const { status } = await requestApi(`${API_URL}/api/auth/microsoft/registration`, {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
@@ -111,8 +99,9 @@ function TutorRegistrationPage({ onBackToLogin }) {
           subjectIds: profile.subjectIds.map(Number),
         }),
       });
-      const data = await readApiResponse(response);
-      if (!response.ok) throw new Error(data.error || "No se pudo enviar la solicitud.");
+      if (status !== 201) {
+        throw new Error(`Se esperaba una respuesta HTTP 201 al registrar al tutor; se recibió HTTP ${status}.`);
+      }
       setComplete(true);
       window.history.replaceState({}, "", window.location.pathname);
     } catch (requestError) {

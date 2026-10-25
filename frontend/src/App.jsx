@@ -2,7 +2,8 @@ import { useCallback, useEffect, useState } from "react";
 import AdminLoginPage from "./AdminLoginPage.jsx";
 import Dashboard from "./Dashboard.jsx";
 import LoginPage from "./LoginPage.jsx";
-import { API_URL, readApiResponse } from "./api.js";
+import { API_URL, ApiError, requestApi } from "./api.js";
+import NotFoundPage from "./NotFoundPage.jsx";
 import StudentRegistrationPage from "./StudentRegistrationPage.jsx";
 import TutorRegistrationPage from "./TutorRegistrationPage.jsx";
 import WelcomePage from "./WelcomePage.jsx";
@@ -15,7 +16,9 @@ function App() {
   const [showLogin, setShowLogin] = useState(false);
   const [selectedRole, setSelectedRole] = useState("alumno");
   const [registrationRole, setRegistrationRole] = useState(null);
-  const adminLoginMode = window.location.pathname === "/admin-login";
+  const pathname = window.location.pathname.replace(/\/+$/, "") || "/";
+  const adminLoginMode = pathname === "/admin-login";
+  const knownPath = pathname === "/" || adminLoginMode;
 
   useEffect(() => {
     const query = new URLSearchParams(window.location.search);
@@ -44,37 +47,31 @@ function App() {
   }, []);
 
   useEffect(() => {
-    fetch(`${API_URL}/api/session`, { credentials: "include" })
-      .then(async (response) => {
-        if (response.status === 401) return null;
-        const data = await readApiResponse(response);
-        if (!response.ok) {
-          throw new Error(data.error ||
-            "No se pudo restaurar la sesión. Verifica que el backend y MySQL estén activos.");
-        }
-        return data;
-      })
+    if (!knownPath) {
+      setAuthLoading(false);
+      return undefined;
+    }
+
+    requestApi(`${API_URL}/api/session`, { credentials: "include" })
+      .then(({ data }) => data)
       .then(setUser)
       .catch((requestError) => {
+        if (requestError instanceof ApiError && requestError.status === 401) return;
         setAuthError(requestError instanceof TypeError
           ? "No se pudo conectar con EduMatch. Verifica que el backend y MySQL estén activos."
           : requestError.message);
         setShowLogin(true);
       })
       .finally(() => setAuthLoading(false));
-  }, []);
+  }, [knownPath]);
 
   const handleLogout = async () => {
     setAuthError("");
     try {
-      const response = await fetch(`${API_URL}/api/logout`, {
+      await requestApi(`${API_URL}/api/logout`, {
         method: "POST",
         credentials: "include",
       });
-      if (!response.ok) {
-        const data = await readApiResponse(response);
-        throw new Error(data.error || "No se pudo cerrar la sesión.");
-      }
       setUser(null);
       setSelectedRole("alumno");
       setShowLogin(false);
@@ -87,14 +84,12 @@ function App() {
   const handleAdminLogin = async ({ identifier, password }) => {
     setAuthError("");
     try {
-      const response = await fetch(`${API_URL}/api/login`, {
+      const { data } = await requestApi(`${API_URL}/api/login`, {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ identifier, password }),
       });
-      const data = await readApiResponse(response);
-      if (!response.ok) throw new Error(data.error || "No se pudo iniciar sesión.");
       if (data.role !== "admin") throw new Error("Esta cuenta no tiene acceso administrativo.");
       setUser(data);
     } catch (requestError) {
@@ -106,12 +101,7 @@ function App() {
     setAuthError("");
     setInstitutionalLoginLoading(true);
     try {
-      const response = await fetch(`${API_URL}/api/health`, { credentials: "include" });
-      const data = await readApiResponse(response);
-      if (!response.ok) {
-        throw new Error(data.error ||
-          "No se pudo conectar con la API de EduMatch. Verifica que el backend y MySQL estén activos.");
-      }
+      await requestApi(`${API_URL}/api/health`, { credentials: "include" });
       window.location.assign(
         `${API_URL}/api/auth/microsoft?role=${encodeURIComponent(role)}`,
       );
@@ -146,6 +136,8 @@ function App() {
   if (authLoading) {
     return <main className="login-page"><p className="message">Verificando sesión...</p></main>;
   }
+
+  if (!knownPath) return <NotFoundPage />;
 
   if (user) {
     return (

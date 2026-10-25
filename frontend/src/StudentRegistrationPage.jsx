@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { API_URL, readApiResponse } from "./api.js";
+import { API_URL, requestApi } from "./api.js";
 
 const emptyProfile = {
   username: "",
@@ -23,23 +23,15 @@ function StudentRegistrationPage({ onBackToLogin }) {
   useEffect(() => {
     const controller = new AbortController();
     Promise.all([
-      fetch(`${API_URL}/api/auth/microsoft/registration`, {
+      requestApi(`${API_URL}/api/auth/microsoft/registration`, {
         credentials: "include",
         signal: controller.signal,
       }),
-      fetch(`${API_URL}/api/catalogs`, { signal: controller.signal }),
+      requestApi(`${API_URL}/api/catalogs`, { signal: controller.signal }),
     ])
-      .then(async ([registrationResponse, catalogsResponse]) => {
-        const registration = await readApiResponse(registrationResponse);
-        const catalogs = await readApiResponse(catalogsResponse);
-        if (!registrationResponse.ok) {
-          throw new Error(registration.error || "La verificación institucional expiró; inicia sesión nuevamente.");
-        }
+      .then(([{ data: registration }, { data: catalogs }]) => {
         if (registration.role !== "alumno") {
           throw new Error("La verificación institucional no corresponde a un perfil de estudiante.");
-        }
-        if (!catalogsResponse.ok) {
-          throw new Error(catalogs.error || "No se pudieron cargar los catálogos institucionales.");
         }
         setEmail(registration.email);
         setCareers(catalogs.careers);
@@ -61,7 +53,7 @@ function StudentRegistrationPage({ onBackToLogin }) {
     event.preventDefault();
     setError("");
     try {
-      const response = await fetch(`${API_URL}/api/auth/microsoft/student-registration`, {
+      const { status } = await requestApi(`${API_URL}/api/auth/microsoft/student-registration`, {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
@@ -71,8 +63,9 @@ function StudentRegistrationPage({ onBackToLogin }) {
           campusId: Number(profile.campusId),
         }),
       });
-      const data = await readApiResponse(response);
-      if (!response.ok) throw new Error(data.error || "No se pudo crear el perfil.");
+      if (status !== 201) {
+        throw new Error(`Se esperaba una respuesta HTTP 201 al crear el perfil; se recibió HTTP ${status}.`);
+      }
       setComplete(true);
       window.history.replaceState({}, "", window.location.pathname);
     } catch (requestError) {
