@@ -2,8 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import AdminLoginPage from "./AdminLoginPage.jsx";
 import Dashboard from "./Dashboard.jsx";
 import LoginPage from "./LoginPage.jsx";
-import { API_URL, ApiError, requestApi } from "./api.js";
-import NotFoundPage from "./NotFoundPage.jsx";
+import { API_URL, HTTP_STATUS, requestApi } from "./api.js";
 import StudentRegistrationPage from "./StudentRegistrationPage.jsx";
 import TutorRegistrationPage from "./TutorRegistrationPage.jsx";
 import WelcomePage from "./WelcomePage.jsx";
@@ -16,9 +15,7 @@ function App() {
   const [showLogin, setShowLogin] = useState(false);
   const [selectedRole, setSelectedRole] = useState("alumno");
   const [registrationRole, setRegistrationRole] = useState(null);
-  const pathname = window.location.pathname.replace(/\/+$/, "") || "/";
-  const adminLoginMode = pathname === "/admin-login";
-  const knownPath = pathname === "/" || adminLoginMode;
+  const adminLoginMode = window.location.pathname === "/admin-login";
 
   useEffect(() => {
     const query = new URLSearchParams(window.location.search);
@@ -47,23 +44,21 @@ function App() {
   }, []);
 
   useEffect(() => {
-    if (!knownPath) {
-      setAuthLoading(false);
-      return undefined;
-    }
-
-    requestApi(`${API_URL}/api/session`, { credentials: "include" })
-      .then(({ data }) => data)
+    requestApi(
+      `${API_URL}/api/session`,
+      { credentials: "include" },
+      { allowedStatuses: [HTTP_STATUS.UNAUTHORIZED] },
+    )
+      .then(({ data, status }) => status === HTTP_STATUS.UNAUTHORIZED ? null : data)
       .then(setUser)
       .catch((requestError) => {
-        if (requestError instanceof ApiError && requestError.status === 401) return;
         setAuthError(requestError instanceof TypeError
           ? "No se pudo conectar con EduMatch. Verifica que el backend y MySQL estén activos."
           : requestError.message);
         setShowLogin(true);
       })
       .finally(() => setAuthLoading(false));
-  }, [knownPath]);
+  }, []);
 
   const handleLogout = async () => {
     setAuthError("");
@@ -136,8 +131,6 @@ function App() {
   if (authLoading) {
     return <main className="login-page"><p className="message">Verificando sesión...</p></main>;
   }
-
-  if (!knownPath) return <NotFoundPage />;
 
   if (user) {
     return (

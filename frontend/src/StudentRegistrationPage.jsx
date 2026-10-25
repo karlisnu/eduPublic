@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { API_URL, requestApi } from "./api.js";
+import { API_URL, HTTP_STATUS, requestApi } from "./api.js";
 
 const emptyProfile = {
   username: "",
@@ -53,19 +53,20 @@ function StudentRegistrationPage({ onBackToLogin }) {
     event.preventDefault();
     setError("");
     try {
-      const { status } = await requestApi(`${API_URL}/api/auth/microsoft/student-registration`, {
-        method: "POST",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          ...profile,
-          careerId: Number(profile.careerId),
-          campusId: Number(profile.campusId),
-        }),
-      });
-      if (status !== 201) {
-        throw new Error(`Se esperaba una respuesta HTTP 201 al crear el perfil; se recibió HTTP ${status}.`);
-      }
+      await requestApi(
+        `${API_URL}/api/auth/microsoft/student-registration`,
+        {
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            ...profile,
+            careerId: Number(profile.careerId),
+            campusId: Number(profile.campusId),
+          }),
+        },
+        { expectedStatus: HTTP_STATUS.CREATED },
+      );
       setComplete(true);
       window.history.replaceState({}, "", window.location.pathname);
     } catch (requestError) {

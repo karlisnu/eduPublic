@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { API_URL, requestApi } from "./api.js";
+import { API_URL, HTTP_STATUS, requestApi } from "./api.js";
 import TutorManagementPage from "./TutorManagementPage.jsx";
 
 function Dashboard({ user, authError, onLogout, onSessionExpired }) {
@@ -33,7 +33,9 @@ function Dashboard({ user, authError, onLogout, onSessionExpired }) {
     })
       .then(({ data }) => setTutors(data))
       .catch((requestError) => {
-        if (requestError.status === 401) onSessionExpired(requestError.message);
+        if (requestError.status === HTTP_STATUS.UNAUTHORIZED) {
+          onSessionExpired(requestError.message);
+        }
         if (requestError.name !== "AbortError") setTutorsError(requestError.message);
       })
       .finally(() => setLoadingTutors(false));
@@ -53,7 +55,9 @@ function Dashboard({ user, authError, onLogout, onSessionExpired }) {
     })
       .then(({ data }) => setApprovals(data))
       .catch((requestError) => {
-        if (requestError.status === 401) onSessionExpired(requestError.message);
+        if (requestError.status === HTTP_STATUS.UNAUTHORIZED) {
+          onSessionExpired(requestError.message);
+        }
         if (requestError.name !== "AbortError") setApprovalsError(requestError.message);
       })
       .finally(() => setApprovalsLoading(false));
@@ -72,7 +76,9 @@ function Dashboard({ user, authError, onLogout, onSessionExpired }) {
       });
       setApprovals((current) => current.filter((item) => item.id !== userId));
     } catch (requestError) {
-      if (requestError.status === 401) onSessionExpired(requestError.message);
+      if (requestError.status === HTTP_STATUS.UNAUTHORIZED) {
+        onSessionExpired(requestError.message);
+      }
       setApprovalsError(requestError.message);
     }
   };
@@ -115,7 +121,9 @@ function Dashboard({ user, authError, onLogout, onSessionExpired }) {
       setRequestHour("");
       setRequestMessage("Solicitud enviada al tutor para esta semana.");
     } catch (requestFailure) {
-      if (requestFailure.status === 401) onSessionExpired(requestFailure.message);
+      if (requestFailure.status === HTTP_STATUS.UNAUTHORIZED) {
+        onSessionExpired(requestFailure.message);
+      }
       setRequestError(requestFailure.message);
     } finally {
       setSubmittingRequest(false);

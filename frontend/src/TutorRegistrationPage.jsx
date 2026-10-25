@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { API_URL, requestApi } from "./api.js";
+import { API_URL, HTTP_STATUS, requestApi } from "./api.js";
 
 const emptyProfile = {
   username: "",
@@ -87,21 +87,22 @@ function TutorRegistrationPage({ onBackToLogin }) {
     event.preventDefault();
     setError("");
     try {
-      const { status } = await requestApi(`${API_URL}/api/auth/microsoft/registration`, {
-        method: "POST",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          ...profile,
-          careerId: Number(profile.careerId),
-          currentSemester: Number(profile.currentSemester),
-          average: Number(profile.average),
-          subjectIds: profile.subjectIds.map(Number),
-        }),
-      });
-      if (status !== 201) {
-        throw new Error(`Se esperaba una respuesta HTTP 201 al registrar al tutor; se recibió HTTP ${status}.`);
-      }
+      await requestApi(
+        `${API_URL}/api/auth/microsoft/registration`,
+        {
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            ...profile,
+            careerId: Number(profile.careerId),
+            currentSemester: Number(profile.currentSemester),
+            average: Number(profile.average),
+            subjectIds: profile.subjectIds.map(Number),
+          }),
+        },
+        { expectedStatus: HTTP_STATUS.CREATED },
+      );
       setComplete(true);
       window.history.replaceState({}, "", window.location.pathname);
     } catch (requestError) {

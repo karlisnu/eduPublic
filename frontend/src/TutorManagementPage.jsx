@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { API_URL, requestApi } from "./api.js";
+import { API_URL, HTTP_STATUS, requestApi } from "./api.js";
 
 const weekdays = [
   { id: 1, label: "Lunes" },
@@ -67,7 +67,9 @@ function TutorManagementPage({ onSessionExpired }) {
       setWeek(data);
       setDraftSlots(data.availability);
     } catch (requestError) {
-      if (requestError.status === 401) onSessionExpired(requestError.message);
+      if (requestError.status === HTTP_STATUS.UNAUTHORIZED) {
+        onSessionExpired(requestError.message);
+      }
       setError(requestError.message);
     } finally {
       setLoading(false);
@@ -109,7 +111,9 @@ function TutorManagementPage({ onSessionExpired }) {
       setNotice("Disponibilidad guardada para esta semana.");
       await loadWeek();
     } catch (requestError) {
-      if (requestError.status === 401) onSessionExpired(requestError.message);
+      if (requestError.status === HTTP_STATUS.UNAUTHORIZED) {
+        onSessionExpired(requestError.message);
+      }
       setError(requestError.message);
     } finally {
       setSaving(false);
@@ -129,7 +133,9 @@ function TutorManagementPage({ onSessionExpired }) {
       setNotice(decision === "accepted" ? "Alumno aceptado para esta semana." : "Solicitud rechazada.");
       await loadWeek();
     } catch (requestError) {
-      if (requestError.status === 401) onSessionExpired(requestError.message);
+      if (requestError.status === HTTP_STATUS.UNAUTHORIZED) {
+        onSessionExpired(requestError.message);
+      }
       setError(requestError.message);
     }
   };
@@ -153,7 +159,9 @@ function TutorManagementPage({ onSessionExpired }) {
       setScheduleChoices((current) => ({ ...current, [student.id]: "" }));
       await loadWeek();
     } catch (requestError) {
-      if (requestError.status === 401) onSessionExpired(requestError.message);
+      if (requestError.status === HTTP_STATUS.UNAUTHORIZED) {
+        onSessionExpired(requestError.message);
+      }
       setError(requestError.message);
     }
   };
@@ -171,7 +179,9 @@ function TutorManagementPage({ onSessionExpired }) {
       setNotice(status === "completed" ? "Tutoría marcada como completada." : "Tutoría cancelada.");
       await loadWeek();
     } catch (requestError) {
-      if (requestError.status === 401) onSessionExpired(requestError.message);
+      if (requestError.status === HTTP_STATUS.UNAUTHORIZED) {
+        onSessionExpired(requestError.message);
+      }
       setError(requestError.message);
     }
   };
