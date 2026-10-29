@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { API_URL, readApiResponse } from "./api.js";
+import { API_URL, HTTP_STATUS, requestApi } from "./api.js";
 import TutorManagementPage from "./TutorManagementPage.jsx";
 
 function Dashboard({ user, authError, onLogout, onSessionExpired }) {
@@ -27,20 +27,15 @@ function Dashboard({ user, authError, onLogout, onSessionExpired }) {
     const query = subject.trim() ? `?subject=${encodeURIComponent(subject.trim())}` : "";
     setLoadingTutors(true);
     setTutorsError("");
-    fetch(`${API_URL}/api/tutors${query}`, {
+    requestApi(`${API_URL}/api/tutors${query}`, {
       credentials: "include",
       signal: controller.signal,
     })
-      .then(async (response) => {
-        const data = await readApiResponse(response);
-        if (response.status === 401) {
-          onSessionExpired("La sesión expiró. Inicia sesión nuevamente.");
-        }
-        if (!response.ok) throw new Error(data.error || "No se pudieron cargar los tutores.");
-        return data;
-      })
-      .then(setTutors)
+      .then(({ data }) => setTutors(data))
       .catch((requestError) => {
+        if (requestError.status === HTTP_STATUS.UNAUTHORIZED) {
+          onSessionExpired(requestError.message);
+        }
         if (requestError.name !== "AbortError") setTutorsError(requestError.message);
       })
       .finally(() => setLoadingTutors(false));
@@ -54,20 +49,15 @@ function Dashboard({ user, authError, onLogout, onSessionExpired }) {
     const controller = new AbortController();
     setApprovalsLoading(true);
     setApprovalsError("");
-    fetch(`${API_URL}/api/admin/approvals/pending`, {
+    requestApi(`${API_URL}/api/admin/approvals/pending`, {
       credentials: "include",
       signal: controller.signal,
     })
-      .then(async (response) => {
-        const data = await readApiResponse(response);
-        if (response.status === 401) {
-          onSessionExpired("La sesión expiró. Inicia sesión nuevamente.");
-        }
-        if (!response.ok) throw new Error(data.error || "No se pudieron cargar las solicitudes.");
-        return data;
-      })
-      .then(setApprovals)
+      .then(({ data }) => setApprovals(data))
       .catch((requestError) => {
+        if (requestError.status === HTTP_STATUS.UNAUTHORIZED) {
+          onSessionExpired(requestError.message);
+        }
         if (requestError.name !== "AbortError") setApprovalsError(requestError.message);
       })
       .finally(() => setApprovalsLoading(false));
@@ -78,17 +68,17 @@ function Dashboard({ user, authError, onLogout, onSessionExpired }) {
   const handleApproval = async (userId, decision) => {
     setApprovalsError("");
     try {
-      const response = await fetch(`${API_URL}/api/admin/users/${userId}/approval`, {
+      await requestApi(`${API_URL}/api/admin/users/${userId}/approval`, {
         method: "PATCH",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ decision }),
       });
-      const data = await readApiResponse(response);
-      if (response.status === 401) onSessionExpired("La sesión expiró. Inicia sesión nuevamente.");
-      if (!response.ok) throw new Error(data.error || "No se pudo guardar la decisión.");
       setApprovals((current) => current.filter((item) => item.id !== userId));
     } catch (requestError) {
+      if (requestError.status === HTTP_STATUS.UNAUTHORIZED) {
+        onSessionExpired(requestError.message);
+      }
       setApprovalsError(requestError.message);
     }
   };
@@ -111,7 +101,7 @@ function Dashboard({ user, authError, onLogout, onSessionExpired }) {
     const weekStart = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
     setSubmittingRequest(true);
     try {
-      const response = await fetch(`${API_URL}/api/tutor-management/requests`, {
+      await requestApi(`${API_URL}/api/tutor-management/requests`, {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
@@ -125,15 +115,15 @@ function Dashboard({ user, authError, onLogout, onSessionExpired }) {
           preferredStartHour: requestHour ? Number(requestHour) : null,
         }),
       });
-      const data = await readApiResponse(response);
-      if (response.status === 401) onSessionExpired("La sesión expiró. Inicia sesión nuevamente.");
-      if (!response.ok) throw new Error(data.error || "No se pudo enviar la solicitud.");
       setRequestTutor(null);
       setRequestTopic("");
       setRequestWeekday("");
       setRequestHour("");
       setRequestMessage("Solicitud enviada al tutor para esta semana.");
     } catch (requestFailure) {
+      if (requestFailure.status === HTTP_STATUS.UNAUTHORIZED) {
+        onSessionExpired(requestFailure.message);
+      }
       setRequestError(requestFailure.message);
     } finally {
       setSubmittingRequest(false);

@@ -126,6 +126,26 @@ y tutores quedan pendientes de aprobación; un registro pendiente no equivale a
 una cuenta aprobada. Las rutas de aprobación requieren una sesión de
 administrador.
 
+## Verificación de CI
+
+El workflow de GitHub Actions ejecuta análisis de secretos, auditoría de
+dependencias, pruebas backend con cobertura mínima, migraciones MySQL, una
+comprobación HTTP de la API y el build frontend. El detalle de cada barrera,
+los comandos locales y la configuración de protecciones de rama está en
+[ci.md](./ci.md).
+
+En un Dev Container con MySQL accesible, ejecuta las comprobaciones locales
+disponibles con:
+
+```bash
+bash scripts/ci-local.sh
+```
+
+La versión local no descarga herramientas ni requiere acceso a internet. Por
+eso, el escaneo Gitleaks y `npm audit` se verifican en el workflow alojado de
+GitHub; el resto de las verificaciones locales termina con error si una prueba,
+migración, compilación o comprobación de API falla.
+
 ## Diagnóstico y recuperación
 
 ### El backend no inicia o `/api/health` falla
@@ -192,5 +212,6 @@ infraestructura.
   y modelo de integración.
 - [week1-verification.md](./week1-verification.md): comprobación del entorno
   local y controles del repositorio.
+- [ci.md](./ci.md): barreras del workflow, umbrales y verificación de CI.
 - [cloudflare.md](./cloudflare.md): túnel temporal para pruebas; no es un
   procedimiento de despliegue de producción.

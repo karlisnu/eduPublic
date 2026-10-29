@@ -1,12 +1,49 @@
-name: Validate EDU-EduMatch
+name: Validate EduMatch
 
 on:
   pull_request:
   push:
     branches: [main, karla-branch]
 
+permissions:
+  contents: read
+
 jobs:
-  validate:
+  secret-scan:
+    name: Secret scan
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    steps:
+      - name: Checkout full history
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Scan repository for secrets
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_ENABLE_COMMENTS: false
+
+  dependency-audit:
+    name: Dependency audit
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Audit root, backend, and frontend dependencies
+        run: |
+          npm audit --audit-level=high
+          npm --prefix backend audit --audit-level=high
+          npm --prefix frontend audit --audit-level=high
+
+  backend:
+    name: Backend tests and MySQL integration
     runs-on: ubuntu-latest
     services:
       db:
@@ -23,6 +60,13 @@ jobs:
           --health-interval=5s
           --health-timeout=5s
           --health-retries=20
+    env:
+      DB_HOST: 127.0.0.1
+      DB_PORT: 3306
+      DB_USER: dev
+      DB_PASSWORD: dev
+      DB_NAME: appdb
+      NODE_ENV: test
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -31,34 +75,32 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - name: Install backend dependencies
+        run: npm --prefix backend ci
+      - name: Detect disabled or bypassed checks
+        run: node backend/scripts/check-ci-bypasses.js
+      - name: Apply database migrations
+        run: npm --prefix backend run db:migrate
+      - name: Run backend tests with coverage and minimum test count
+        run: npm --prefix backend run test:ci
+      - name: Start backend and verify MySQL-backed health endpoint
+        run: npm --prefix backend run ci:smoke
 
-      - name: Validate runtime versions
-        run: |
-          node --version
-          npm --version
-          test "$(node --version | cut -d. -f1)" = "v22"
-
-      - name: Validate frontend package
-        working-directory: frontend
-        run: npm install --ignore-scripts
-
-      - name: Validate setup script
-        run: bash -n .devcontainer/setup.sh
-
-      - name: Validate Dev Container JSON
-        run: node -e "JSON.parse(require('fs').readFileSync('.devcontainer/devcontainer.json', 'utf8'))"
-
-      - name: Validate MySQL connectivity
-        env:
-          MYSQL_PWD: dev
-        run: mysql --protocol=tcp -h 127.0.0.1 -u dev appdb -e "SELECT 1;"
-
-      - name: Validate required project files
-        run: |
-          test -f .devcontainer/devcontainer.json
-          test -f .devcontainer/docker-compose.yml
-          test -f .github/pull_request_template.md
-          test -f .github/ISSUE_TEMPLATE/project_proposal.md
-          test -f docs/pair-log.md
-          test -f docs/architecture.md
-          test -f docs/week1-verification.md
+  frontend:
+    name: Frontend build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install frontend dependencies
+        run: npm --prefix frontend ci
+      - name: Build frontend
+        run: npm --prefix frontend run build

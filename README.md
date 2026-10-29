@@ -81,6 +81,22 @@ The container runs `bash .devcontainer/setup.sh` after creation and installs the
 The project architecture and planned API boundary are documented in [`docs/architecture.md`](docs/architecture.md). Pull requests are validated by [`.github/workflows/ci.yml`](.github/workflows/ci.yml).
 The complete Week 1 verification procedure is documented in [`docs/week1-verification.md`](docs/week1-verification.md).
 
+## Run CI checks locally without internet
+
+Run the local equivalent of the GitHub Actions checks with:
+
+```bash
+bash scripts/ci-local.sh
+```
+
+The script installs frontend dependencies in npm offline mode, so the required
+packages must already be in the local npm cache. It requires Node.js 22, Bash,
+and the MySQL client. A local MySQL server must already be running on
+`127.0.0.1:3306` with database `appdb` and user `dev`; the default password is
+`dev`. Set `MYSQL_PWD` before running the script if that account uses a
+different password. The script does not download tools, start MySQL, or access
+the network.
+
 ## Project Proposal
 
 The primary entity is `Student`. A student can create many `TutoringRequest` records through a foreign key relationship. The related `Tutor` entity stores subjects, availability, academic experience, and rating. The first milestone covers tutor list/detail views, a validated form, and a read-only endpoint.

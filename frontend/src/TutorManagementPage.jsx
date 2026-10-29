@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { API_URL, readApiResponse } from "./api.js";
+import { API_URL, HTTP_STATUS, requestApi } from "./api.js";
 
 const weekdays = [
   { id: 1, label: "Lunes" },
@@ -60,16 +60,16 @@ function TutorManagementPage({ onSessionExpired }) {
     setLoading(true);
     setError("");
     try {
-      const response = await fetch(
+      const { data } = await requestApi(
         `${API_URL}/api/tutor-management/week?weekStart=${encodeURIComponent(weekStart)}`,
         { credentials: "include" },
       );
-      const data = await readApiResponse(response);
-      if (response.status === 401) onSessionExpired("La sesión expiró. Inicia sesión nuevamente.");
-      if (!response.ok) throw new Error(data.error || "No se pudo cargar la semana.");
       setWeek(data);
       setDraftSlots(data.availability);
     } catch (requestError) {
+      if (requestError.status === HTTP_STATUS.UNAUTHORIZED) {
+        onSessionExpired(requestError.message);
+      }
       setError(requestError.message);
     } finally {
       setLoading(false);
@@ -102,18 +102,18 @@ function TutorManagementPage({ onSessionExpired }) {
     setError("");
     setNotice("");
     try {
-      const response = await fetch(`${API_URL}/api/tutor-management/availability`, {
+      await requestApi(`${API_URL}/api/tutor-management/availability`, {
         method: "PUT",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ weekStart, slots: draftSlots }),
       });
-      const data = await readApiResponse(response);
-      if (response.status === 401) onSessionExpired("La sesión expiró. Inicia sesión nuevamente.");
-      if (!response.ok) throw new Error(data.error || "No se pudo guardar la disponibilidad.");
       setNotice("Disponibilidad guardada para esta semana.");
       await loadWeek();
     } catch (requestError) {
+      if (requestError.status === HTTP_STATUS.UNAUTHORIZED) {
+        onSessionExpired(requestError.message);
+      }
       setError(requestError.message);
     } finally {
       setSaving(false);
@@ -124,18 +124,18 @@ function TutorManagementPage({ onSessionExpired }) {
     setError("");
     setNotice("");
     try {
-      const response = await fetch(`${API_URL}/api/tutor-management/requests/${requestId}`, {
+      await requestApi(`${API_URL}/api/tutor-management/requests/${requestId}`, {
         method: "PATCH",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ decision }),
       });
-      const data = await readApiResponse(response);
-      if (response.status === 401) onSessionExpired("La sesión expiró. Inicia sesión nuevamente.");
-      if (!response.ok) throw new Error(data.error || "No se pudo actualizar la solicitud.");
       setNotice(decision === "accepted" ? "Alumno aceptado para esta semana." : "Solicitud rechazada.");
       await loadWeek();
     } catch (requestError) {
+      if (requestError.status === HTTP_STATUS.UNAUTHORIZED) {
+        onSessionExpired(requestError.message);
+      }
       setError(requestError.message);
     }
   };
@@ -146,7 +146,7 @@ function TutorManagementPage({ onSessionExpired }) {
     setError("");
     setNotice("");
     try {
-      const response = await fetch(
+      await requestApi(
         `${API_URL}/api/tutor-management/students/${student.id}/schedule`,
         {
           method: "PUT",
@@ -155,13 +155,13 @@ function TutorManagementPage({ onSessionExpired }) {
           body: JSON.stringify({ weekStart, weekday, startHour }),
         },
       );
-      const data = await readApiResponse(response);
-      if (response.status === 401) onSessionExpired("La sesión expiró. Inicia sesión nuevamente.");
-      if (!response.ok) throw new Error(data.error || "No se pudo programar la tutoría.");
       setNotice("Tutoría programada.");
       setScheduleChoices((current) => ({ ...current, [student.id]: "" }));
       await loadWeek();
     } catch (requestError) {
+      if (requestError.status === HTTP_STATUS.UNAUTHORIZED) {
+        onSessionExpired(requestError.message);
+      }
       setError(requestError.message);
     }
   };
@@ -170,18 +170,18 @@ function TutorManagementPage({ onSessionExpired }) {
     setError("");
     setNotice("");
     try {
-      const response = await fetch(`${API_URL}/api/tutor-management/sessions/${sessionId}/status`, {
+      await requestApi(`${API_URL}/api/tutor-management/sessions/${sessionId}/status`, {
         method: "PATCH",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ status }),
       });
-      const data = await readApiResponse(response);
-      if (response.status === 401) onSessionExpired("La sesión expiró. Inicia sesión nuevamente.");
-      if (!response.ok) throw new Error(data.error || "No se pudo actualizar la tutoría.");
       setNotice(status === "completed" ? "Tutoría marcada como completada." : "Tutoría cancelada.");
       await loadWeek();
     } catch (requestError) {
+      if (requestError.status === HTTP_STATUS.UNAUTHORIZED) {
+        onSessionExpired(requestError.message);
+      }
       setError(requestError.message);
     }
   };

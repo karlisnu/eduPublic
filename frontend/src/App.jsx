@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import AdminLoginPage from "./AdminLoginPage.jsx";
 import Dashboard from "./Dashboard.jsx";
 import LoginPage from "./LoginPage.jsx";
-import { API_URL, readApiResponse } from "./api.js";
+import { API_URL, HTTP_STATUS, requestApi } from "./api.js";
 import StudentRegistrationPage from "./StudentRegistrationPage.jsx";
 import TutorRegistrationPage from "./TutorRegistrationPage.jsx";
 import WelcomePage from "./WelcomePage.jsx";
@@ -44,16 +44,12 @@ function App() {
   }, []);
 
   useEffect(() => {
-    fetch(`${API_URL}/api/session`, { credentials: "include" })
-      .then(async (response) => {
-        if (response.status === 401) return null;
-        const data = await readApiResponse(response);
-        if (!response.ok) {
-          throw new Error(data.error ||
-            "No se pudo restaurar la sesión. Verifica que el backend y MySQL estén activos.");
-        }
-        return data;
-      })
+    requestApi(
+      `${API_URL}/api/session`,
+      { credentials: "include" },
+      { allowedStatuses: [HTTP_STATUS.UNAUTHORIZED] },
+    )
+      .then(({ data, status }) => status === HTTP_STATUS.UNAUTHORIZED ? null : data)
       .then(setUser)
       .catch((requestError) => {
         setAuthError(requestError instanceof TypeError
@@ -67,14 +63,10 @@ function App() {
   const handleLogout = async () => {
     setAuthError("");
     try {
-      const response = await fetch(`${API_URL}/api/logout`, {
+      await requestApi(`${API_URL}/api/logout`, {
         method: "POST",
         credentials: "include",
       });
-      if (!response.ok) {
-        const data = await readApiResponse(response);
-        throw new Error(data.error || "No se pudo cerrar la sesión.");
-      }
       setUser(null);
       setSelectedRole("alumno");
       setShowLogin(false);
@@ -87,14 +79,12 @@ function App() {
   const handleAdminLogin = async ({ identifier, password }) => {
     setAuthError("");
     try {
-      const response = await fetch(`${API_URL}/api/login`, {
+      const { data } = await requestApi(`${API_URL}/api/login`, {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ identifier, password }),
       });
-      const data = await readApiResponse(response);
-      if (!response.ok) throw new Error(data.error || "No se pudo iniciar sesión.");
       if (data.role !== "admin") throw new Error("Esta cuenta no tiene acceso administrativo.");
       setUser(data);
     } catch (requestError) {
@@ -106,12 +96,7 @@ function App() {
     setAuthError("");
     setInstitutionalLoginLoading(true);
     try {
-      const response = await fetch(`${API_URL}/api/health`, { credentials: "include" });
-      const data = await readApiResponse(response);
-      if (!response.ok) {
-        throw new Error(data.error ||
-          "No se pudo conectar con la API de EduMatch. Verifica que el backend y MySQL estén activos.");
-      }
+      await requestApi(`${API_URL}/api/health`, { credentials: "include" });
       window.location.assign(
         `${API_URL}/api/auth/microsoft?role=${encodeURIComponent(role)}`,
       );
