@@ -87,6 +87,12 @@ validación, conserva el error, revisa los registros con la persona responsable
 de los datos y corrige únicamente con información verificada; no inventes
 números de matrícula ni catálogos oficiales.
 
+El seed local incluye las opciones de carrera `Ingeniería en software`,
+`Psicología` y `Mecatrónica`, y los campus `Hermosillo` y `Magdalena`, solicitados
+para probar el formulario. Son datos de prueba y no están verificados como
+catálogo oficial; no los promociones a producción sin validarlos con una fuente
+institucional autorizada.
+
 ### 3. Iniciar API e interfaz
 
 Ejecuta cada comando en una terminal diferente:

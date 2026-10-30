@@ -45,6 +45,27 @@ function createTutorManagementRepository(pool) {
     };
   }
 
+  async function getStudentAvailability(tutorId, weekStart) {
+    const [slots] = await pool.query(
+      `SELECT a.weekday, a.start_hour AS startHour
+       FROM tutor_availability a
+       INNER JOIN tutor_profiles tp ON tp.user_id = a.tutor_id
+       INNER JOIN users u ON u.id = tp.user_id
+       WHERE a.tutor_id = ? AND a.week_start = ?
+         AND tp.application_status = 'approved' AND tp.is_available = TRUE
+         AND u.account_status = 'approved'
+         AND NOT EXISTS (
+           SELECT 1 FROM tutor_sessions ts
+           WHERE ts.tutor_id = a.tutor_id AND ts.week_start = a.week_start
+             AND ts.weekday = a.weekday AND ts.start_hour = a.start_hour
+             AND ts.status <> 'cancelled'
+         )
+       ORDER BY a.weekday, a.start_hour`,
+      [tutorId, weekStart],
+    );
+    return slots;
+  }
+
   async function saveAvailability(tutorId, weekStart, slots) {
     const connection = await pool.getConnection();
     try {
@@ -270,6 +291,29 @@ function createTutorManagementRepository(pool) {
       error.status = 404;
       throw error;
     }
+    const [availableSlots] = await pool.query(
+      `SELECT a.weekday, a.start_hour AS startHour FROM tutor_availability a
+       WHERE a.tutor_id = ? AND a.week_start = ?
+         AND NOT EXISTS (
+           SELECT 1 FROM tutor_sessions ts
+           WHERE ts.tutor_id = a.tutor_id AND ts.week_start = a.week_start
+             AND ts.weekday = a.weekday AND ts.start_hour = a.start_hour
+             AND ts.status <> 'cancelled'
+         )`,
+      [entity.tutorId, entity.weekStart],
+    );
+    if (!availableSlots.length) {
+      const error = new Error("El tutor no tiene horarios disponibles para esta semana");
+      error.status = 409;
+      throw error;
+    }
+    if (entity.preferredWeekday !== null && !availableSlots.some((slot) =>
+      Number(slot.weekday) === entity.preferredWeekday &&
+      Number(slot.startHour) === entity.preferredStartHour)) {
+      const error = new Error("El horario elegido ya no está disponible; actualiza la lista de horarios");
+      error.status = 409;
+      throw error;
+    }
     const [result] = await pool.query(
       `INSERT INTO tutoring_requests
         (tutor_id, student_id, week_start, subject, topic, school_shift,
@@ -287,6 +331,7 @@ function createTutorManagementRepository(pool) {
     createRequest,
     decideRequest,
     getWeek,
+    getStudentAvailability,
     saveAvailability,
     scheduleStudent,
     updateSessionStatus,

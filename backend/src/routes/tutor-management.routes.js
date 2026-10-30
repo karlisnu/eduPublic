@@ -15,6 +15,17 @@ function createTutorManagementRouter({ pool, requireAuthentication, requireRoles
     }
   });
 
+  router.get("/tutors/:id/availability", requireAuthentication, requireRoles("alumno"), async (req, res, next) => {
+    try {
+      res.json(await service.getStudentAvailability(
+        Number(req.params.id),
+        req.query.weekStart,
+      ));
+    } catch (error) {
+      next(error);
+    }
+  });
+
   router.put("/availability", ...tutorOnly, async (req, res, next) => {
     try {
       res.json(await service.saveAvailability(req.auth.id, req.body));

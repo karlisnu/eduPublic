@@ -1,12 +1,25 @@
 import { useEffect, useState } from "react";
 import { API_URL, HTTP_STATUS, requestApi } from "./api.js";
 import TutorManagementPage from "./TutorManagementPage.jsx";
+import {
+  startTutorAvailabilitySync,
+  useTutorAvailabilityStore,
+} from "./store/tutorAvailabilityStore.js";
+import { useTutorsStore } from "./store/tutorsStore.js";
+import TutorResultsCount from "./TutorResultsCount.jsx";
+
+function getCurrentWeekStart() {
+  const today = new Date();
+  today.setDate(today.getDate() - ((today.getDay() + 6) % 7));
+  return `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+}
 
 function Dashboard({ user, authError, onLogout, onSessionExpired }) {
   const [subject, setSubject] = useState("");
-  const [tutors, setTutors] = useState([]);
-  const [loadingTutors, setLoadingTutors] = useState(true);
-  const [tutorsError, setTutorsError] = useState("");
+  const tutors = useTutorsStore((store) => store.items);
+  const loadingTutors = useTutorsStore((store) => store.loading);
+  const tutorsError = useTutorsStore((store) => store.error);
+  const fetchTutors = useTutorsStore((store) => store.fetchAll);
   const [approvals, setApprovals] = useState([]);
   const [approvalsLoading, setApprovalsLoading] = useState(false);
   const [approvalsError, setApprovalsError] = useState("");
@@ -16,32 +29,48 @@ function Dashboard({ user, authError, onLogout, onSessionExpired }) {
   const [requestShift, setRequestShift] = useState("matutino");
   const [requestWeekday, setRequestWeekday] = useState("");
   const [requestHour, setRequestHour] = useState("");
+  const [requestWeekStart, setRequestWeekStart] = useState(getCurrentWeekStart);
   const [requestMessage, setRequestMessage] = useState("");
   const [requestError, setRequestError] = useState("");
   const [submittingRequest, setSubmittingRequest] = useState(false);
+  const availability = useTutorAvailabilityStore((store) => store.slots);
+  const availabilityTutorId = useTutorAvailabilityStore((store) => store.tutorId);
+  const availabilityWeekStart = useTutorAvailabilityStore((store) => store.weekStart);
+  const availabilityLoading = useTutorAvailabilityStore((store) => store.loading);
+  const availabilityError = useTutorAvailabilityStore((store) => store.error);
+
+  useEffect(() => {
+    if (!requestTutor) return undefined;
+    return startTutorAvailabilitySync(requestTutor.id, requestWeekStart);
+  }, [requestTutor?.id, requestWeekStart]);
+
+  const tutorAvailability = availabilityTutorId === requestTutor?.id &&
+    availabilityWeekStart === requestWeekStart ? availability : [];
+  const availableDays = [...new Set(tutorAvailability.map((slot) => slot.weekday))];
+  const availableHours = tutorAvailability
+    .filter((slot) => String(slot.weekday) === requestWeekday)
+    .map((slot) => slot.startHour);
+
+  useEffect(() => {
+    if (requestWeekday && !tutorAvailability.some((slot) =>
+      slot.weekday === Number(requestWeekday) && slot.startHour === Number(requestHour))) {
+      setRequestWeekday("");
+      setRequestHour("");
+    }
+  }, [requestHour, requestWeekday, tutorAvailability]);
 
   useEffect(() => {
     if (user.role !== "alumno") return undefined;
 
     const controller = new AbortController();
-    const query = subject.trim() ? `?subject=${encodeURIComponent(subject.trim())}` : "";
-    setLoadingTutors(true);
-    setTutorsError("");
-    requestApi(`${API_URL}/api/tutors${query}`, {
-      credentials: "include",
-      signal: controller.signal,
-    })
-      .then(({ data }) => setTutors(data))
-      .catch((requestError) => {
-        if (requestError.status === HTTP_STATUS.UNAUTHORIZED) {
-          onSessionExpired(requestError.message);
-        }
-        if (requestError.name !== "AbortError") setTutorsError(requestError.message);
-      })
-      .finally(() => setLoadingTutors(false));
+    fetchTutors(subject, controller.signal).catch((requestError) => {
+      if (requestError.status === HTTP_STATUS.UNAUTHORIZED) {
+        onSessionExpired(requestError.message);
+      }
+    });
 
     return () => controller.abort();
-  }, [onSessionExpired, subject, user.role]);
+  }, [fetchTutors, onSessionExpired, subject, user.role]);
 
   useEffect(() => {
     if (user.role !== "admin") return undefined;
@@ -96,9 +125,6 @@ function Dashboard({ user, authError, onLogout, onSessionExpired }) {
       return;
     }
 
-    const today = new Date();
-    today.setDate(today.getDate() - ((today.getDay() + 6) % 7));
-    const weekStart = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
     setSubmittingRequest(true);
     try {
       await requestApi(`${API_URL}/api/tutor-management/requests`, {
@@ -110,7 +136,7 @@ function Dashboard({ user, authError, onLogout, onSessionExpired }) {
           subject: requestSubject,
           topic: requestTopic.trim(),
           schoolShift: requestShift,
-          weekStart,
+          weekStart: requestWeekStart,
           preferredWeekday: requestWeekday ? Number(requestWeekday) : null,
           preferredStartHour: requestHour ? Number(requestHour) : null,
         }),
@@ -119,7 +145,7 @@ function Dashboard({ user, authError, onLogout, onSessionExpired }) {
       setRequestTopic("");
       setRequestWeekday("");
       setRequestHour("");
-      setRequestMessage("Solicitud enviada al tutor para esta semana.");
+      setRequestMessage("Solicitud enviada. El tutor debe confirmarla para que la tutoría quede programada.");
     } catch (requestFailure) {
       if (requestFailure.status === HTTP_STATUS.UNAUTHORIZED) {
         onSessionExpired(requestFailure.message);
@@ -218,7 +244,7 @@ function Dashboard({ user, authError, onLogout, onSessionExpired }) {
                 <p className="eyebrow">Resultados</p>
                 <h2>Tutores disponibles</h2>
               </div>
-              {!loadingTutors && <span className="result-count">{tutors.length} perfiles</span>}
+              <TutorResultsCount />
             </div>
 
             {loadingTutors && <p className="message">Cargando tutores...</p>}
@@ -249,6 +275,9 @@ function Dashboard({ user, authError, onLogout, onSessionExpired }) {
                           } else {
                             const tutorSubjects = tutor.subject.split(", ");
                             setRequestTutor(tutor);
+                            setRequestWeekStart(getCurrentWeekStart());
+                            setRequestWeekday("");
+                            setRequestHour("");
                             setRequestSubject(tutorSubjects.includes(subject.trim())
                               ? subject.trim()
                               : tutorSubjects[0]);
@@ -275,20 +304,40 @@ function Dashboard({ user, authError, onLogout, onSessionExpired }) {
                             <option value="matutino">Matutino</option><option value="vespertino">Vespertino</option><option value="nocturno">Nocturno</option>
                           </select>
                         </label>
+                        <p className="message" aria-live="polite">
+                          {availabilityLoading
+                            ? "Cargando los horarios disponibles..."
+                            : availabilityError
+                              ? `No se pudieron cargar los horarios: ${availabilityError}`
+                              : tutorAvailability.length === 0
+                                ? "Este tutor no tiene horarios libres publicados para esta semana."
+                                : "Los horarios se actualizan automáticamente. La hora elegida es una preferencia; el tutor confirmará la tutoría."}
+                        </p>
                         <label>Día preferido (opcional)
-                          <select value={requestWeekday} onChange={(event) => { setRequestWeekday(event.target.value); if (!event.target.value) setRequestHour(""); }}>
-                            <option value="">Horario flexible</option><option value="1">Lunes</option><option value="2">Martes</option><option value="3">Miércoles</option><option value="4">Jueves</option><option value="5">Viernes</option>
+                          <select value={requestWeekday} onChange={(event) => { setRequestWeekday(event.target.value); setRequestHour(""); }}>
+                            <option value="">Horario flexible</option>
+                            {availableDays.map((day) => (
+                              <option key={day} value={day}>
+                                {["", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes"][day]}
+                              </option>
+                            ))}
                           </select>
                         </label>
                         {requestWeekday && <label>Hora preferida
                           <select required value={requestHour} onChange={(event) => setRequestHour(event.target.value)}>
                             <option value="">Selecciona una hora</option>
-                            {Array.from({ length: 13 }, (_, index) => index + 7).map((hour) => (
+                            {availableHours.map((hour) => (
                               <option key={hour} value={hour}>{`${hour % 12 || 12}:00 ${hour < 12 ? "a. m." : "p. m."}`}</option>
                             ))}
                           </select>
                         </label>}
-                        <button className="management-primary" type="submit" disabled={submittingRequest}>{submittingRequest ? "Enviando..." : "Enviar solicitud"}</button>
+                        <button
+                          className="management-primary"
+                          type="submit"
+                          disabled={submittingRequest || availabilityLoading || Boolean(availabilityError) || tutorAvailability.length === 0}
+                        >
+                          {submittingRequest ? "Enviando..." : "Enviar solicitud"}
+                        </button>
                       </form>
                     )}
                   </div>

@@ -9,8 +9,8 @@ class TutorRequestDto {
       topic: body.topic,
       schoolShift: body.schoolShift,
       weekStart: body.weekStart,
-      preferredWeekday: body.preferredWeekday,
-      preferredStartHour: body.preferredStartHour,
+      preferredWeekday: body.preferredWeekday ?? null,
+      preferredStartHour: body.preferredStartHour ?? null,
     };
   }
 }
