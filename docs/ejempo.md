@@ -167,6 +167,131 @@ Self-check · 2 min · cover the answers first
 
    It changed the same list, so the app saw nothing new. Write `set((s) => ({ items: [...s.items, newItem] }))` to make a new list.
 
+## Part 3 · Break it · 15 min
+
+Use the real tutor store in `frontend/src/store/tutorsStore.js` and the student
+dashboard in `frontend/src/Dashboard.jsx`. In this store, `loading` is the
+status-like value; there is no `status` field. Make these changes temporarily,
+observe the screen and console, then remove every temporary button and probe.
+Wait for the dashboard's initial tutor load to finish before each experiment,
+so a real API response does not change `items` or `loading` during the test.
+
+### A. Mutate the list in place
+
+1. In `Dashboard`, temporarily add this button near the tutor results:
+
+   ```jsx
+   <button
+     type="button"
+     onClick={() =>
+       useTutorsStore.setState((state) => {
+         state.items.push({
+           id: "temporary",
+           name: "Tutor temporal",
+           subject: "Prueba",
+           bio: "",
+           experience: "",
+           rating: 0,
+           is_available: false,
+         });
+         return state;
+       })
+     }
+   >
+     Add tutor (mutate)
+   </button>
+   ```
+
+2. Open the student dashboard and click once. The result count and cards do not
+   update: the store got the same state object back, so Zustand did not notify
+   subscribers. The list was still changed in memory. Reload the page to clear
+   that temporary mutation.
+3. Keep the button, but replace its handler with an immutable update:
+
+   ```jsx
+   onClick={() =>
+     useTutorsStore.setState((state) => ({
+       items: [
+         ...state.items,
+         {
+           id: "temporary",
+           name: "Tutor temporal",
+           subject: "Prueba",
+           bio: "",
+           experience: "",
+           rating: 0,
+           is_available: false,
+         },
+       ],
+     }))
+   }
+   ```
+
+4. Click once again. The new array and state object notify the subscribers, so
+   the result count and the temporary tutor card appear. Record what changed:
+
+   - In-place mutation: ______________________________________________
+   - New array: _______________________________________________________
+
+### B. Subscribe to the whole store, then select narrowly
+
+1. Temporarily create `frontend/src/StoreRenderProbe.jsx`:
+
+   ```jsx
+   import { memo } from "react";
+   import { useTutorsStore } from "./store/tutorsStore.js";
+
+   const StoreRenderProbe = memo(function StoreRenderProbe() {
+     const store = useTutorsStore();
+     console.count("StoreRenderProbe");
+     return <p>Loading: {String(store.loading)}</p>;
+   });
+
+   export default StoreRenderProbe;
+   ```
+
+   Import and render `<StoreRenderProbe />` in `Dashboard`. `memo` keeps parent
+   renders from being counted as probe renders.
+
+2. Temporarily add a button in `Dashboard` to toggle the store's `loading`
+   value:
+
+   ```jsx
+   <button
+     type="button"
+     onClick={() =>
+       useTutorsStore.setState((state) => ({ loading: !state.loading }))
+     }
+   >
+     Toggle loading
+   </button>
+   ```
+
+3. Clear the browser console, click the button three times, and note the change
+   in `StoreRenderProbe`'s count. The full-store subscription sees each store
+   update, even though the items did not change.
+4. Change only the probe's subscription and displayed value:
+
+   ```jsx
+   const items = useTutorsStore((state) => state.items);
+   console.count("StoreRenderProbe");
+   return <p>Tutors: {items.length}</p>;
+   ```
+
+   Clear the console again, click the same button three times, and record the
+   count change. Since the selected `items` array did not change, this probe
+   should not rerender for `loading` updates.
+
+   - Whole-store count change after three clicks: _____________________
+   - `items` selector count change after three clicks: _________________
+
+   The exact count can vary in development, so compare the count change across
+   the same three clicks rather than assuming a fixed initial render count.
+
+5. Remove the temporary button, the probe import/render, and
+   `StoreRenderProbe.jsx`. Reload the dashboard and confirm the temporary tutor
+   is gone.
+
 Universidad Estatal de Sonora
 
 Frontend 061CE017\
