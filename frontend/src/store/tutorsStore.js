@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { API_URL, requestApi } from "../api.js";
+import { API_URL, requestApi } from "../api/api.js";
 
 let requestVersion = 0;
 

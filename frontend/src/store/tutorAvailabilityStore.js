@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from "react";
-import { API_URL, requestApi } from "../api.js";
+import { API_URL, requestApi } from "../api/api.js";
 
 const REFRESH_INTERVAL_MS = 5000;
 const listeners = new Set();

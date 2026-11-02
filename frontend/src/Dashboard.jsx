@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { API_URL, HTTP_STATUS, requestApi } from "./api.js";
+import { API_URL, HTTP_STATUS, requestApi } from "./api/api.js";
 import TutorManagementPage from "./TutorManagementPage.jsx";
 import {
   startTutorAvailabilitySync,

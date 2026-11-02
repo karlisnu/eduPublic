@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import AdminLoginPage from "./AdminLoginPage.jsx";
 import Dashboard from "./Dashboard.jsx";
 import LoginPage from "./LoginPage.jsx";
-import { API_URL, HTTP_STATUS, requestApi } from "./api.js";
+import { API_URL, HTTP_STATUS, requestApi } from "./api/api.js";
 import StudentRegistrationPage from "./StudentRegistrationPage.jsx";
 import TutorRegistrationPage from "./TutorRegistrationPage.jsx";
 import WelcomePage from "./WelcomePage.jsx";

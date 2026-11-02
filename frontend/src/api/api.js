@@ -41,6 +41,8 @@ export class ApiError extends Error {
 }
 
 async function readApiResponse(response) {
+  if (response.status === HTTP_STATUS.NO_CONTENT) return null;
+
   const body = await response.text();
   if (!body) return {};
 
@@ -59,7 +61,19 @@ export async function requestApi(
   fetchOptions = {},
   { expectedStatus, allowedStatuses = [] } = {},
 ) {
-  const response = await fetch(url, fetchOptions);
+  let response;
+  try {
+    response = await fetch(url, fetchOptions);
+  } catch (error) {
+    if (error instanceof TypeError) {
+      throw new ApiError(
+        0,
+        "No se pudo conectar con el servidor. Verifica tu conexión e inténtalo nuevamente.",
+      );
+    }
+    throw error;
+  }
+
   const data = await readApiResponse(response);
 
   if (!response.ok && !allowedStatuses.includes(response.status)) {
