@@ -40,6 +40,15 @@ function createTutorManagementService(repository) {
     return { weekStart, maxWeeklyStudents: MAX_WEEKLY_STUDENTS, ...await repository.getWeek(tutorId, weekStart) };
   }
 
+  async function getStudentAvailability(tutorId, rawWeekStart) {
+    if (!Number.isSafeInteger(tutorId) || tutorId < 1) {
+      throw serviceError("El identificador del tutor no es válido");
+    }
+    const weekStart = parseWeekStart(rawWeekStart);
+    const slots = await repository.getStudentAvailability(tutorId, weekStart);
+    return { tutorId, weekStart, slots };
+  }
+
   async function saveAvailability(tutorId, body) {
     if (!body || typeof body.weekStart !== "string" || !Array.isArray(body.slots)) {
       throw serviceError("Envía la semana y la lista de horarios disponibles");
@@ -127,7 +136,15 @@ function createTutorManagementService(repository) {
     return { requestId, ...entity };
   }
 
-  return { createRequest, decideRequest, getWeek, saveAvailability, scheduleStudent, updateSessionStatus };
+  return {
+    createRequest,
+    decideRequest,
+    getStudentAvailability,
+    getWeek,
+    saveAvailability,
+    scheduleStudent,
+    updateSessionStatus,
+  };
 }
 
 module.exports = {

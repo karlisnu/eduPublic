@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import AdminLoginPage from "./AdminLoginPage.jsx";
 import Dashboard from "./Dashboard.jsx";
 import LoginPage from "./LoginPage.jsx";
-import { API_URL, HTTP_STATUS, requestApi } from "./api.js";
+import { API_URL, HTTP_STATUS, requestApi } from "./api/api.js";
 import StudentRegistrationPage from "./StudentRegistrationPage.jsx";
 import TutorRegistrationPage from "./TutorRegistrationPage.jsx";
 import WelcomePage from "./WelcomePage.jsx";
@@ -33,9 +33,9 @@ function App() {
     };
 
     if (status === "student_register" || status === "tutor_register") {
-      const role = status === "student_register" ? "alumno" : "tutor";
-      setRegistrationRole(role);
-      setSelectedRole(role);
+      const registrationRole = status === "student_register" ? "alumno" : "tutor";
+      setRegistrationRole(registrationRole);
+      setSelectedRole(registrationRole);
     } else if (status && statusMessages[status]) {
       setAuthError(statusMessages[status]);
       setSelectedRole(role);
@@ -52,7 +52,7 @@ function App() {
       .then(({ data, status }) => status === HTTP_STATUS.UNAUTHORIZED ? null : data)
       .then(setUser)
       .catch((requestError) => {
-        setAuthError(requestError instanceof TypeError
+        setAuthError(requestError.status === 0
           ? "No se pudo conectar con EduMatch. Verifica que el backend y MySQL estén activos."
           : requestError.message);
         setShowLogin(true);
@@ -101,10 +101,9 @@ function App() {
         `${API_URL}/api/auth/microsoft?role=${encodeURIComponent(role)}`,
       );
     } catch (requestError) {
-      setAuthError(requestError instanceof TypeError
+      setAuthError(requestError.status === 0
         ? "No se pudo conectar con el servidor de EduMatch. Verifica que el backend y MySQL estén activos."
         : requestError.message);
-    } finally {
       setInstitutionalLoginLoading(false);
     }
   };

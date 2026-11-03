@@ -33,6 +33,20 @@ INSERT INTO campuses (name, is_active)
 VALUES ('[DEMO ONLY] Unverified campus', FALSE)
 ON DUPLICATE KEY UPDATE is_active = FALSE;
 
+-- User-requested local registration test values; not verified as official catalogs.
+INSERT INTO careers (name, is_active)
+VALUES
+  ('Ingeniería en software', TRUE),
+  ('Psicología', TRUE),
+  ('Mecatrónica', TRUE)
+ON DUPLICATE KEY UPDATE is_active = VALUES(is_active);
+
+INSERT INTO campuses (name, is_active)
+VALUES
+  ('Hermosillo', TRUE),
+  ('Magdalena', TRUE)
+ON DUPLICATE KEY UPDATE is_active = VALUES(is_active);
+
 INSERT INTO student_profiles
   (user_id, first_name, last_name, student_number, career_id, campus_id, phone)
 SELECT u.id, profiles.first_name, profiles.last_name, profiles.student_number,

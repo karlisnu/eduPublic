@@ -382,6 +382,29 @@ const openapi = {
         },
       },
     },
+    "/api/tutor-management/tutors/{id}/availability": {
+      get: {
+        tags: ["Gestión de tutorías"],
+        summary: "Consultar horarios disponibles de un tutor",
+        description: "Requiere sesión de estudiante; solo devuelve horarios libres de tutores aprobados.",
+        security: [{ sessionCookie: [] }],
+        parameters: [
+          { name: "id", in: "path", required: true, schema: { type: "integer", minimum: 1 } },
+          {
+            name: "weekStart",
+            in: "query",
+            required: true,
+            schema: { type: "string", format: "date", description: "Lunes de la semana" },
+          },
+        ],
+        responses: {
+          200: jsonResponse("Horarios disponibles", { type: "object" }),
+          400: errorResponse,
+          401: errorResponse,
+          403: errorResponse,
+        },
+      },
+    },
     "/api/tutor-management/availability": {
       put: {
         tags: ["Gestión de tutorías"],
@@ -443,7 +466,7 @@ const openapi = {
           required: true,
           content: { "application/json": { schema: { $ref: "#/components/schemas/TutorRequestSubmission" } } },
         },
-        responses: { 201: jsonResponse("Solicitud enviada", { type: "object" }), 400: errorResponse, 401: errorResponse, 403: errorResponse, 404: errorResponse },
+        responses: { 201: jsonResponse("Solicitud enviada", { type: "object" }), 400: errorResponse, 401: errorResponse, 403: errorResponse, 404: errorResponse, 409: errorResponse },
       },
     },
     "/api/admin/approvals/pending": {

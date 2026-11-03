@@ -18,6 +18,24 @@ test("availability accepts only weekdays and hourly blocks from 7 through 19", (
   assert.throws(() => parseSlot({ weekday: 1, startHour: 20 }), /lunes y viernes/);
 });
 
+test("students can request only valid-week availability for a tutor", async () => {
+  let queried;
+  const service = createTutorManagementService({
+    getStudentAvailability: async (tutorId, weekStart) => {
+      queried = { tutorId, weekStart };
+      return [{ weekday: 2, startHour: 16 }];
+    },
+  });
+  assert.deepEqual(await service.getStudentAvailability(7, "2026-10-19"), {
+    tutorId: 7,
+    weekStart: "2026-10-19",
+    slots: [{ weekday: 2, startHour: 16 }],
+  });
+  assert.deepEqual(queried, { tutorId: 7, weekStart: "2026-10-19" });
+  await assert.rejects(service.getStudentAvailability(0, "2026-10-19"), /identificador/);
+  await assert.rejects(service.getStudentAvailability(7, "2026-10-20"), /lunes/);
+});
+
 test("service enforces the weekly cap and compatible availability before accepting", async () => {
   let validate;
   const repository = {

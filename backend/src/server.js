@@ -180,6 +180,7 @@ app.get("/", async (req, res) => {
       "POST /api/logout",
       "GET /api/tutors",
       "GET /api/tutor-management/week",
+      "GET /api/tutor-management/tutors/:id/availability",
       "PUT /api/tutor-management/availability",
       "PATCH /api/tutor-management/requests/:id",
       "PUT /api/tutor-management/students/:id/schedule",
