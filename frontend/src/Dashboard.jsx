@@ -7,6 +7,7 @@ import {
 } from "./store/tutorAvailabilityStore.js";
 import { useTutorsStore } from "./store/tutorsStore.js";
 import TutorResultsCount from "./TutorResultsCount.jsx";
+import AdminTutorManagement from "./AdminTutorManagement.jsx";
 
 function getCurrentWeekStart() {
   const today = new Date();
@@ -216,6 +217,7 @@ function Dashboard({ user, authError, onLogout, onSessionExpired }) {
               </article>
             ))}
           </div>
+          <AdminTutorManagement onSessionExpired={onSessionExpired} />
         </section>
       ) : user.role === "tutor" ? (
         <TutorManagementPage onSessionExpired={onSessionExpired} />

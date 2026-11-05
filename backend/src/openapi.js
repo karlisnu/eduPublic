@@ -363,6 +363,64 @@ const openapi = {
         },
       },
     },
+    "/api/admin/tutors": {
+      get: {
+        tags: ["Administración"],
+        summary: "Listar perfiles de tutor para administración",
+        description: "Solo administradores pueden consultar tutores, incluidos perfiles pendientes o rechazados.",
+        security: [{ sessionCookie: [] }],
+        responses: {
+          200: jsonResponse("Perfiles de tutor", {
+            type: "array",
+            items: { $ref: "#/components/schemas/AdminTutor" },
+          }),
+          401: errorResponse,
+          403: errorResponse,
+          503: errorResponse,
+        },
+      },
+    },
+    "/api/admin/tutors/{id}": {
+      put: {
+        tags: ["Administración"],
+        summary: "Actualizar el perfil de un tutor",
+        description: "Solo administradores pueden modificar el perfil de un tutor. No cambia su estado de aprobación.",
+        security: [{ sessionCookie: [] }],
+        parameters: [{
+          name: "id",
+          in: "path",
+          required: true,
+          schema: { type: "integer", minimum: 1 },
+        }],
+        requestBody: {
+          required: true,
+          content: {
+            "application/json": {
+              schema: { $ref: "#/components/schemas/AdminTutorUpdate" },
+            },
+          },
+        },
+        responses: {
+          200: jsonResponse("Perfil actualizado", {
+            type: "object",
+            properties: {
+              id: { type: "integer" },
+              first_name: { type: "string" },
+              last_name: { type: "string" },
+              bio: { type: "string", nullable: true, maxLength: 100 },
+              experience: { type: "string", maxLength: 100 },
+              is_available: { type: "boolean" },
+            },
+            required: ["id", "first_name", "last_name", "bio", "experience", "is_available"],
+          }),
+          400: errorResponse,
+          401: errorResponse,
+          403: errorResponse,
+          404: errorResponse,
+          503: errorResponse,
+        },
+      },
+    },
     "/api/tutor-management/week": {
       get: {
         tags: ["Gestión de tutorías"],
@@ -561,6 +619,36 @@ const openapi = {
       },
     },
     schemas: {
+      AdminTutor: {
+        type: "object",
+        properties: {
+          id: { type: "integer" },
+          username: { type: "string" },
+          email: { type: "string", format: "email" },
+          account_status: { type: "string", enum: ["pending", "approved", "rejected", "suspended"] },
+          first_name: { type: "string" },
+          last_name: { type: "string" },
+          bio: { type: "string", nullable: true, maxLength: 100 },
+          experience: { type: "string", maxLength: 100 },
+          is_available: { type: "boolean" },
+          application_status: { type: "string", enum: ["pending", "approved", "rejected"] },
+        },
+        required: [
+          "id", "username", "email", "account_status", "first_name", "last_name",
+          "bio", "experience", "is_available", "application_status",
+        ],
+      },
+      AdminTutorUpdate: {
+        type: "object",
+        properties: {
+          firstName: { type: "string", pattern: "^\\p{L}+$", maxLength: 80 },
+          lastName: { type: "string", pattern: "^\\p{L}+$", maxLength: 120 },
+          bio: { type: "string", maxLength: 100 },
+          experience: { type: "string", minLength: 1, maxLength: 100 },
+          isAvailable: { type: "boolean" },
+        },
+        required: ["firstName", "lastName", "bio", "experience", "isAvailable"],
+      },
       CatalogEntry: {
         type: "object",
         properties: {

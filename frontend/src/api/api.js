@@ -40,6 +40,43 @@ export class ApiError extends Error {
   }
 }
 
+export function registerTutor(profile) {
+  return requestApi(
+    `${API_URL}/api/auth/microsoft/registration`,
+    {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(profile),
+    },
+    { expectedStatus: HTTP_STATUS.CREATED },
+  );
+}
+
+export function getAdminTutors(signal) {
+  return requestApi(`${API_URL}/api/admin/tutors`, {
+    credentials: "include",
+    signal,
+  });
+}
+
+export function updateAdminTutor(id, profile) {
+  return requestApi(`${API_URL}/api/admin/tutors/${encodeURIComponent(id)}`, {
+    method: "PUT",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(profile),
+  });
+}
+
+export function deleteAdminTutor(id) {
+  return requestApi(
+    `${API_URL}/api/admin/users/${encodeURIComponent(id)}`,
+    { method: "DELETE", credentials: "include" },
+    { expectedStatus: HTTP_STATUS.NO_CONTENT },
+  );
+}
+
 async function readApiResponse(response) {
   if (response.status === HTTP_STATUS.NO_CONTENT) return null;
 
