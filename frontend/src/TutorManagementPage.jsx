@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { API_URL, HTTP_STATUS, requestApi } from "./api/api.js";
 
 const weekdays = [
@@ -45,40 +45,55 @@ function formatHour(hour) {
 
 function TutorManagementPage({ onSessionExpired }) {
   const [weekStart, setWeekStart] = useState(() => mondayOf(new Date()));
-  const [week, setWeek] = useState(null);
+  const [weekState, setWeekState] = useState({
+    status: "loading",
+    data: null,
+    message: "",
+  });
+  const week = weekState.data;
+  const loading = weekState.status === "loading";
   const [draftSlots, setDraftSlots] = useState([]);
-  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [savingAction, setSavingAction] = useState("");
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const [retryAttempt, setRetryAttempt] = useState(0);
   const [subjectFilter, setSubjectFilter] = useState("");
   const [dayFilter, setDayFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
   const [scheduleChoices, setScheduleChoices] = useState({});
+  const writeLock = useRef(false);
+  const loadRequestVersion = useRef(0);
 
-  const loadWeek = useCallback(async () => {
-    setLoading(true);
+  const loadWeek = useCallback(async (signal) => {
+    const requestVersion = ++loadRequestVersion.current;
+    setWeekState({ status: "loading", data: null, message: "" });
     setError("");
     try {
       const { data } = await requestApi(
         `${API_URL}/api/tutor-management/week?weekStart=${encodeURIComponent(weekStart)}`,
-        { credentials: "include" },
+        { credentials: "include", signal },
       );
-      setWeek(data);
-      setDraftSlots(data.availability);
+      if (requestVersion === loadRequestVersion.current && !signal?.aborted) {
+        setWeekState({ status: "success", data, message: "" });
+        setDraftSlots(data.availability);
+      }
     } catch (requestError) {
+      if (requestError.name === "AbortError") return;
       if (requestError.status === HTTP_STATUS.UNAUTHORIZED) {
         onSessionExpired(requestError.message);
       }
-      setError(requestError.message);
-    } finally {
-      setLoading(false);
+      if (requestVersion === loadRequestVersion.current && !signal?.aborted) {
+        setWeekState({ status: "error", data: null, message: requestError.message });
+      }
     }
   }, [onSessionExpired, weekStart]);
 
   useEffect(() => {
-    loadWeek();
-  }, [loadWeek]);
+    const controller = new AbortController();
+    void loadWeek(controller.signal);
+    return () => controller.abort();
+  }, [loadWeek, retryAttempt]);
 
   const occupied = useMemo(() => new Set(
     (week?.students || [])
@@ -98,7 +113,10 @@ function TutorManagementPage({ onSessionExpired }) {
   };
 
   const saveAvailability = async () => {
+    if (writeLock.current) return;
+    writeLock.current = true;
     setSaving(true);
+    setSavingAction("availability");
     setError("");
     setNotice("");
     try {
@@ -117,10 +135,15 @@ function TutorManagementPage({ onSessionExpired }) {
       setError(requestError.message);
     } finally {
       setSaving(false);
+      setSavingAction("");
+      writeLock.current = false;
     }
   };
 
   const decideRequest = async (requestId, decision) => {
+    if (writeLock.current) return;
+    writeLock.current = true;
+    setSavingAction(`request:${requestId}`);
     setError("");
     setNotice("");
     try {
@@ -137,11 +160,16 @@ function TutorManagementPage({ onSessionExpired }) {
         onSessionExpired(requestError.message);
       }
       setError(requestError.message);
+    } finally {
+      setSavingAction("");
+      writeLock.current = false;
     }
   };
 
   const scheduleStudent = async (student, selectedSlot) => {
-    if (!selectedSlot) return;
+    if (!selectedSlot || writeLock.current) return;
+    writeLock.current = true;
+    setSavingAction(`schedule:${student.id}`);
     const [weekday, startHour] = selectedSlot.split(":").map(Number);
     setError("");
     setNotice("");
@@ -163,10 +191,16 @@ function TutorManagementPage({ onSessionExpired }) {
         onSessionExpired(requestError.message);
       }
       setError(requestError.message);
+    } finally {
+      setSavingAction("");
+      writeLock.current = false;
     }
   };
 
   const updateSessionStatus = async (sessionId, status) => {
+    if (writeLock.current) return;
+    writeLock.current = true;
+    setSavingAction(`session:${sessionId}`);
     setError("");
     setNotice("");
     try {
@@ -183,6 +217,9 @@ function TutorManagementPage({ onSessionExpired }) {
         onSessionExpired(requestError.message);
       }
       setError(requestError.message);
+    } finally {
+      setSavingAction("");
+      writeLock.current = false;
     }
   };
 
@@ -222,7 +259,7 @@ function TutorManagementPage({ onSessionExpired }) {
       <section className="management-section">
         <div className="section-heading">
           <div><p className="eyebrow">Disponibilidad</p><h2>Configura tu semana</h2></div>
-          <button className="management-primary" type="button" disabled={saving || loading} onClick={saveAvailability}>
+          <button className="management-primary" type="button" disabled={saving || loading || Boolean(savingAction)} onClick={saveAvailability}>
             {saving ? "Guardando..." : "Guardar disponibilidad"}
           </button>
         </div>
@@ -232,7 +269,16 @@ function TutorManagementPage({ onSessionExpired }) {
           <span><i className="legend-dot occupied" /> Ocupado</span>
           <span><i className="legend-dot" /> Sin seleccionar</span>
         </div>
-        {loading ? <p className="message">Cargando calendario...</p> : (
+        {weekState.status === "loading" && <p className="message">Cargando calendario...</p>}
+        {weekState.status === "error" && (
+          <div className="management-alert error" role="alert">
+            <p>{weekState.message}</p>
+            <button type="button" onClick={() => setRetryAttempt((attempt) => attempt + 1)}>
+              Try again
+            </button>
+          </div>
+        )}
+        {weekState.status === "success" && (
           <div className="availability-calendar">
             <div className="calendar-corner">Hora</div>
             {weekdays.map((day) => <div className="calendar-day" key={day.id}>{day.label}</div>)}
@@ -263,7 +309,7 @@ function TutorManagementPage({ onSessionExpired }) {
 
       <section className="management-section">
         <div className="section-heading"><div><p className="eyebrow">Revisa y decide</p><h2>Solicitudes de tutoría</h2></div></div>
-        {pendingCount === 0 && !loading && <p className="management-empty">No hay solicitudes pendientes para esta semana.</p>}
+        {pendingCount === 0 && !loading && weekState.status === "success" && <p className="management-empty">No hay solicitudes pendientes para esta semana.</p>}
         <div className="management-card-grid">
           {(week?.requests || []).map((request) => (
             <article className="management-card" key={request.id}>
@@ -278,8 +324,12 @@ function TutorManagementPage({ onSessionExpired }) {
                   : "Horario flexible"}</span>
               </div>
               <div className="management-actions">
-                <button className="management-primary" type="button" disabled={acceptedCount >= 15} onClick={() => decideRequest(request.id, "accepted")}>Aceptar alumno</button>
-                <button className="management-secondary danger" type="button" onClick={() => decideRequest(request.id, "rejected")}>Rechazar</button>
+                <button className="management-primary" type="button" disabled={acceptedCount >= 15 || Boolean(savingAction)} onClick={() => decideRequest(request.id, "accepted")}>
+                  {savingAction === `request:${request.id}` ? "Procesando..." : "Aceptar alumno"}
+                </button>
+                <button className="management-secondary danger" type="button" disabled={Boolean(savingAction)} onClick={() => decideRequest(request.id, "rejected")}>
+                  {savingAction === `request:${request.id}` ? "Procesando..." : "Rechazar"}
+                </button>
               </div>
               {acceptedCount >= 15 && <p className="management-hint">Ya alcanzaste el límite semanal de 15 alumnos.</p>}
             </article>
@@ -294,7 +344,7 @@ function TutorManagementPage({ onSessionExpired }) {
           <label>Día<select value={dayFilter} onChange={(event) => setDayFilter(event.target.value)}><option value="">Todos</option>{weekdays.map((day) => <option key={day.id} value={day.id}>{day.label}</option>)}</select></label>
           <label>Estado<select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}><option value="">Todos</option>{Object.entries(sessionLabels).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select></label>
         </div>
-        {!loading && filteredStudents.length === 0 && <p className="management-empty">No hay alumnos que coincidan con estos filtros.</p>}
+        {!loading && weekState.status === "success" && filteredStudents.length === 0 && <p className="management-empty">No hay alumnos que coincidan con estos filtros.</p>}
         <div className="management-card-grid">
           {filteredStudents.map((student) => {
             const status = student.sessionStatus || "pending";
@@ -321,13 +371,19 @@ function TutorManagementPage({ onSessionExpired }) {
                         return <option key={value} value={value}>{weekdays[slot.weekday - 1].label}, {formatHour(slot.startHour)}</option>;
                       })}
                     </select>
-                    <button className="management-primary" type="button" disabled={!selectedChoice} onClick={() => scheduleStudent(student, selectedChoice)}>Programar tutoría</button>
+                    <button className="management-primary" type="button" disabled={!selectedChoice || Boolean(savingAction)} onClick={() => scheduleStudent(student, selectedChoice)}>
+                      {savingAction === `schedule:${student.id}` ? "Programando..." : "Programar tutoría"}
+                    </button>
                   </div>
                 )}
                 {status === "scheduled" && (
                   <div className="management-actions">
-                    <button className="management-primary" type="button" onClick={() => updateSessionStatus(student.sessionId, "completed")}>Marcar completada</button>
-                    <button className="management-secondary danger" type="button" onClick={() => updateSessionStatus(student.sessionId, "cancelled")}>Cancelar</button>
+                    <button className="management-primary" type="button" disabled={Boolean(savingAction)} onClick={() => updateSessionStatus(student.sessionId, "completed")}>
+                      {savingAction === `session:${student.sessionId}` ? "Guardando..." : "Marcar completada"}
+                    </button>
+                    <button className="management-secondary danger" type="button" disabled={Boolean(savingAction)} onClick={() => updateSessionStatus(student.sessionId, "cancelled")}>
+                      {savingAction === `session:${student.sessionId}` ? "Guardando..." : "Cancelar"}
+                    </button>
                   </div>
                 )}
                 {status === "cancelled" && <p className="management-hint">La tutoría se canceló; puedes asignar otro horario disponible.</p>}

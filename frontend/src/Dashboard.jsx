@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { API_URL, HTTP_STATUS, requestApi } from "./api/api.js";
 import TutorManagementPage from "./TutorManagementPage.jsx";
 import {
@@ -18,11 +18,11 @@ function getCurrentWeekStart() {
 function Dashboard({ user, authError, onLogout, onSessionExpired }) {
   const [subject, setSubject] = useState("");
   const tutors = useTutorsStore((store) => store.items);
-  const loadingTutors = useTutorsStore((store) => store.loading);
-  const tutorsError = useTutorsStore((store) => store.error);
+  const tutorSearchState = useTutorsStore((store) => store.searchState);
   const fetchTutors = useTutorsStore((store) => store.fetchAll);
+  const [tutorSearchRetry, setTutorSearchRetry] = useState(0);
   const [approvals, setApprovals] = useState([]);
-  const [approvalsLoading, setApprovalsLoading] = useState(false);
+  const [approhvalsLoading, setApprovalsLoading] = useState(false);
   const [approvalsError, setApprovalsError] = useState("");
   const [requestTutor, setRequestTutor] = useState(null);
   const [requestSubject, setRequestSubject] = useState("");
@@ -34,6 +34,7 @@ function Dashboard({ user, authError, onLogout, onSessionExpired }) {
   const [requestMessage, setRequestMessage] = useState("");
   const [requestError, setRequestError] = useState("");
   const [submittingRequest, setSubmittingRequest] = useState(false);
+  const requestSubmissionLock = useRef(false);
   const availability = useTutorAvailabilityStore((store) => store.slots);
   const availabilityTutorId = useTutorAvailabilityStore((store) => store.tutorId);
   const availabilityWeekStart = useTutorAvailabilityStore((store) => store.weekStart);
@@ -71,7 +72,7 @@ function Dashboard({ user, authError, onLogout, onSessionExpired }) {
     });
 
     return () => controller.abort();
-  }, [fetchTutors, onSessionExpired, subject, user.role]);
+  }, [fetchTutors, onSessionExpired, subject, tutorSearchRetry, user.role]);
 
   useEffect(() => {
     if (user.role !== "admin") return undefined;
@@ -115,13 +116,17 @@ function Dashboard({ user, authError, onLogout, onSessionExpired }) {
 
   const submitTutorRequest = async (event) => {
     event.preventDefault();
+    if (submittingRequest || requestSubmissionLock.current) return;
+    requestSubmissionLock.current = true;
     setRequestError("");
     setRequestMessage("");
     if (!requestTutor || !requestSubject || requestTopic.trim().length === 0) {
+      requestSubmissionLock.current = false;
       setRequestError("Describe brevemente el tema en el que necesitas ayuda.");
       return;
     }
     if (Boolean(requestWeekday) !== Boolean(requestHour)) {
+      requestSubmissionLock.current = false;
       setRequestError("Selecciona el día y la hora preferidos, o déjalos ambos vacíos.");
       return;
     }
@@ -154,6 +159,7 @@ function Dashboard({ user, authError, onLogout, onSessionExpired }) {
       setRequestError(requestFailure.message);
     } finally {
       setSubmittingRequest(false);
+      requestSubmissionLock.current = false;
     }
   };
 
@@ -249,12 +255,19 @@ function Dashboard({ user, authError, onLogout, onSessionExpired }) {
               <TutorResultsCount />
             </div>
 
-            {loadingTutors && <p className="message">Cargando tutores...</p>}
-            {tutorsError && <p className="message error">{tutorsError}. Verifica que la API esté ejecutándose en el puerto 8000.</p>}
-            {!loadingTutors && !tutorsError && tutors.length === 0 &&
+            {tutorSearchState.status === "loading" && <p className="message">Cargando tutores...</p>}
+            {tutorSearchState.status === "error" && (
+              <div className="message error" role="alert">
+                <p>{tutorSearchState.message}</p>
+                <button type="button" onClick={() => setTutorSearchRetry((count) => count + 1)}>
+                  Try again
+                </button>
+              </div>
+            )}
+            {tutorSearchState.status === "success" && tutors.length === 0 &&
               <p className="message">No encontramos tutores para esa materia.</p>}
 
-            <div className="tutor-grid">
+            {tutorSearchState.status === "success" && <div className="tutor-grid">
               {tutors.map((tutor) => (
                 <article className="tutor-card" key={tutor.id}>
                   <div className="avatar">{tutor.name.charAt(0)}</div>
@@ -338,14 +351,14 @@ function Dashboard({ user, authError, onLogout, onSessionExpired }) {
                           type="submit"
                           disabled={submittingRequest || availabilityLoading || Boolean(availabilityError) || tutorAvailability.length === 0}
                         >
-                          {submittingRequest ? "Enviando..." : "Enviar solicitud"}
+                          {submittingRequest ? "Saving…" : "Enviar solicitud"}
                         </button>
                       </form>
                     )}
                   </div>
                 </article>
               ))}
-            </div>
+            </div>}
           </section>
         </>
       )}

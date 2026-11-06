@@ -29,6 +29,10 @@ antiguos de `Alumnos/html/` y `js/` no son la interfaz React activa.
 - Las cuentas y contraseñas de demostración de desarrollo están documentadas
   en [README.md](../README.md). No las reutilices en producción; los números de
   estudiante de demostración no verifican matrícula.
+- Para preparar los perfiles y horarios de Safe Requests sin cambiar usuarios,
+  contraseñas ni sesiones, ejecuta `npm --prefix backend run db:seed:safe-requests`.
+  El comando solo acepta hosts locales y bases no productivas; necesita que el
+  catálogo y las cuentas de desarrollo ya existan.
 - No guardes secretos en el repositorio, en el frontend ni en logs. La
   aplicación no incluye registro público de administradores: provisiona la
   cuenta inicial mediante un procedimiento controlado fuera de la aplicación.

@@ -15,13 +15,18 @@ export const useTutorsStore = create((set, get) => ({
   items: [],
   loading: false,
   error: "",
+  searchState: { status: "idle", items: [], message: "" },
   adminItems: [],
   adminLoading: false,
   adminError: "",
   fetchAll: async (subject, signal) => {
     const version = ++requestVersion;
     const query = subject.trim() ? `?subject=${encodeURIComponent(subject.trim())}` : "";
-    set({ loading: true, error: "" });
+    set((state) => ({
+      loading: true,
+      error: "",
+      searchState: { status: "loading", items: state.items, message: "" },
+    }));
 
     try {
       const { data } = await requestApi(`${API_URL}/api/tutors${query}`, {
@@ -29,15 +34,24 @@ export const useTutorsStore = create((set, get) => ({
         signal,
       });
       if (version === requestVersion && !signal?.aborted) {
-        set({ items: data, loading: false, error: "" });
+        set({
+          items: data,
+          loading: false,
+          error: "",
+          searchState: { status: "success", items: data, message: "" },
+        });
       }
     } catch (error) {
       if (version === requestVersion && !signal?.aborted) {
-        set({ loading: false, error: error.message });
+        set({
+          loading: false,
+          error: error.message,
+          searchState: { status: "error", items: [], message: error.message },
+        });
       }
       throw error;
     } finally {
-      if (version === requestVersion) {
+      if (version === requestVersion && !signal?.aborted) {
         set({ loading: false });
       }
     }
