@@ -5,6 +5,7 @@ export default defineConfig({
     jsx: "automatic",
   },
   server: {
+    host: "0.0.0.0",
     fs: {
       allow: [".."],
     },
