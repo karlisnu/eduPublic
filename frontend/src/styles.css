@@ -334,6 +334,20 @@ h1, h2, h3, p { margin-top: 0; }
   padding: 10px 16px;
 }
 .approval-actions button:last-child { background: #a6392d; }
+.approval-actions button:disabled { cursor: not-allowed; opacity: .55; }
+.tutor-edit-form { display: grid; flex: 1; gap: 12px; }
+.tutor-edit-form label { color: #647176; display: grid; font-size: .82rem; gap: 6px; }
+.tutor-edit-form input:not([type="checkbox"]), .tutor-edit-form textarea {
+  border: 1px solid #d8d0c6;
+  border-radius: 8px;
+  color: #263238;
+  font: inherit;
+  min-height: 40px;
+  padding: 8px 10px;
+  width: 100%;
+}
+.tutor-edit-form .tutor-availability-toggle { align-items: center; display: flex; }
+.admin-tutors { margin-top: 40px; }
 .section-heading { align-items: end; display: flex; justify-content: space-between; margin-bottom: 28px; }
 h2 { font: 700 2rem 'Comfortaa', sans-serif; margin-bottom: 0; }
 .result-count { color: #8a9698; font-size: .8rem; }

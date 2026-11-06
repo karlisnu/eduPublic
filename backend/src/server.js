@@ -179,6 +179,8 @@ app.get("/", async (req, res) => {
       "GET /api/session",
       "POST /api/logout",
       "GET /api/tutors",
+      "GET /api/admin/tutors",
+      "PUT /api/admin/tutors/:id",
       "GET /api/tutor-management/week",
       "GET /api/tutor-management/tutors/:id/availability",
       "PUT /api/tutor-management/availability",
@@ -802,6 +804,93 @@ app.get(
       res.json(rows);
     } catch (error) {
       next(error);
+    }
+  },
+);
+
+app.put(
+  "/api/admin/tutors/:id",
+  requireAuthentication,
+  requireRoles("admin"),
+  async (req, res, next) => {
+    const tutorId = Number(req.params.id);
+    const body = req.body && typeof req.body === "object" ? req.body : {};
+    const firstName = typeof body.firstName === "string" ? body.firstName.trim() : null;
+    const lastName = typeof body.lastName === "string" ? body.lastName.trim() : null;
+    const bio = typeof body.bio === "string" ? body.bio.trim() : null;
+    const experience = typeof body.experience === "string" ? body.experience.trim() : null;
+    const isAvailable = body.isAvailable;
+
+    if (!Number.isSafeInteger(tutorId) || tutorId < 1) {
+      return res.status(400).json({ error: "El id de tutor no es válido" });
+    }
+    if (firstName === null || !firstName || firstName.length > 80 || !/^\p{L}+$/u.test(firstName) ||
+        lastName === null || !lastName || lastName.length > 120 || !/^\p{L}+$/u.test(lastName)) {
+      return res.status(400).json({ error: "El nombre o apellido del tutor tienen un formato inválido" });
+    }
+    if (bio === null || bio.length > 100 ||
+        experience === null || !experience || experience.length > 100) {
+      return res.status(400).json({ error: "La descripción y experiencia deben tener como máximo 100 caracteres" });
+    }
+    if (typeof isAvailable !== "boolean") {
+      return res.status(400).json({ error: "El estado de disponibilidad debe ser verdadero o falso" });
+    }
+
+    try {
+      await requireDatabase();
+      const [tutors] = await pool.query(
+        `SELECT u.id
+         FROM users u
+         INNER JOIN tutor_profiles tp ON tp.user_id = u.id
+         WHERE u.id = ? AND u.role = 'tutor'`,
+        [tutorId],
+      );
+      if (tutors.length === 0) {
+        return res.status(404).json({ error: "Tutor no encontrado" });
+      }
+
+      await pool.query(
+        `UPDATE tutor_profiles
+         SET first_name = ?, last_name = ?, bio = ?, experience = ?, is_available = ?
+         WHERE user_id = ?`,
+        [firstName, lastName, bio || null, experience, isAvailable, tutorId],
+      );
+      return res.json({
+        id: tutorId,
+        first_name: firstName,
+        last_name: lastName,
+        bio: bio || null,
+        experience,
+        is_available: isAvailable,
+      });
+    } catch (error) {
+      return next(error);
+    }
+  },
+);
+
+app.get(
+  "/api/admin/tutors",
+  requireAuthentication,
+  requireRoles("admin"),
+  async (_req, res, next) => {
+    try {
+      await requireDatabase();
+      const [rows] = await pool.query(
+        `SELECT u.id, u.username, u.email, u.account_status,
+                tp.first_name, tp.last_name, tp.bio, tp.experience,
+                tp.is_available, tp.application_status
+         FROM users u
+         INNER JOIN tutor_profiles tp ON tp.user_id = u.id
+         WHERE u.role = 'tutor'
+         ORDER BY u.id ASC`,
+      );
+      return res.json(rows.map((tutor) => ({
+        ...tutor,
+        is_available: Boolean(Number(tutor.is_available)),
+      })));
+    } catch (error) {
+      return next(error);
     }
   },
 );

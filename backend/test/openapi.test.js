@@ -15,6 +15,7 @@ test("OpenAPI document describes every current API endpoint", () => {
     [
       "GET /",
       "GET /api/admin/approvals/pending",
+      "GET /api/admin/tutors",
       "GET /api/auth/microsoft",
       "GET /api/auth/microsoft/callback",
       "GET /api/auth/microsoft/registration",
@@ -28,6 +29,7 @@ test("OpenAPI document describes every current API endpoint", () => {
       "GET /api/tutor-management/tutors/{id}/availability",
       "DELETE /api/admin/users/{id}",
       "PATCH /api/admin/users/{id}/approval",
+      "PUT /api/admin/tutors/{id}",
       "PATCH /api/tutor-management/requests/{id}",
       "PATCH /api/tutor-management/sessions/{id}/status",
       "POST /api/auth/microsoft/registration",
@@ -62,6 +64,8 @@ test("OpenAPI secures protected routes with the existing session cookie", () => 
     "/api/tutor-management/sessions/{id}/status",
     "/api/tutor-management/requests",
     "/api/admin/approvals/pending",
+    "/api/admin/tutors",
+    "/api/admin/tutors/{id}",
     "/api/admin/users/{id}/approval",
     "/api/admin/users/{id}",
   ]) {
@@ -76,6 +80,7 @@ test("OpenAPI secures protected routes with the existing session cookie", () => 
     true,
   );
   assert.equal(openapi.paths["/api/admin/users/{id}"].delete.responses[409] !== undefined, true);
+  assert.equal(openapi.paths["/api/admin/tutors/{id}"].put.description.includes("Solo administradores"), true);
 });
 
 test("authentication schemas document student and tutor registration and admin-only password login", () => {
@@ -83,6 +88,11 @@ test("authentication schemas document student and tutor registration and admin-o
 
   assert.deepEqual(schemas.LoginRequest.required, ["identifier", "password"]);
   assert.equal(schemas.LoginRequest.properties.role, undefined);
+  assert.deepEqual(schemas.AdminTutorUpdate.required, [
+    "firstName", "lastName", "bio", "experience", "isAvailable",
+  ]);
+  assert.equal(schemas.AdminTutorUpdate.properties.bio.maxLength, 100);
+  assert.equal(schemas.AdminTutorUpdate.properties.isAvailable.type, "boolean");
   assert.equal(schemas.MicrosoftTutorRegistrationRequest.properties.studentNumber.pattern, "^[0-9]{11}$");
   assert.equal(schemas.MicrosoftTutorRegistrationRequest.properties.average.maximum, 100);
   assert.equal(schemas.MicrosoftTutorRegistrationRequest.properties.subjectIds.minItems, 1);

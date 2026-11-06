@@ -1,5 +1,6 @@
-import { useEffect, useState } from "react";
-import { API_URL, HTTP_STATUS, requestApi } from "./api/api.js";
+import { useEffect, useRef, useState } from "react";
+import { API_URL, requestApi } from "./api/api.js";
+import { useTutorsStore } from "./store/tutorsStore.js";
 
 const emptyProfile = {
   username: "",
@@ -15,6 +16,7 @@ const emptyProfile = {
 };
 
 function TutorRegistrationPage({ onBackToLogin }) {
+  const registerTutor = useTutorsStore((store) => store.registerTutor);
   const [profile, setProfile] = useState(emptyProfile);
   const [email, setEmail] = useState("");
   const [careers, setCareers] = useState([]);
@@ -23,6 +25,8 @@ function TutorRegistrationPage({ onBackToLogin }) {
   const [subjectsLoading, setSubjectsLoading] = useState(false);
   const [error, setError] = useState("");
   const [complete, setComplete] = useState(false);
+  const [submitStatus, setSubmitStatus] = useState("idle");
+  const submitLock = useRef(false);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -85,28 +89,26 @@ function TutorRegistrationPage({ onBackToLogin }) {
 
   const handleSubmit = async (event) => {
     event.preventDefault();
+    if (submitLock.current) return;
+    submitLock.current = true;
+    setSubmitStatus("submitting");
     setError("");
     try {
-      await requestApi(
-        `${API_URL}/api/auth/microsoft/registration`,
-        {
-          method: "POST",
-          credentials: "include",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            ...profile,
-            careerId: Number(profile.careerId),
-            currentSemester: Number(profile.currentSemester),
-            average: Number(profile.average),
-            subjectIds: profile.subjectIds.map(Number),
-          }),
-        },
-        { expectedStatus: HTTP_STATUS.CREATED },
-      );
+      await registerTutor({
+        ...profile,
+        careerId: Number(profile.careerId),
+        currentSemester: Number(profile.currentSemester),
+        average: Number(profile.average),
+        subjectIds: profile.subjectIds.map(Number),
+      });
+      setSubmitStatus("success");
       setComplete(true);
       window.history.replaceState({}, "", window.location.pathname);
     } catch (requestError) {
+      setSubmitStatus("error");
       setError(requestError.message);
+    } finally {
+      submitLock.current = false;
     }
   };
 
@@ -302,9 +304,9 @@ function TutorRegistrationPage({ onBackToLogin }) {
                   type="submit"
                   className="btn-main-login"
                   disabled={!careers.length || !eligibleSubjects.length || !profile.subjectIds.length ||
-                    !email || subjectsLoading}
+                    !email || subjectsLoading || submitStatus === "submitting"}
                 >
-                  ENVIAR SOLICITUD DE TUTOR
+                  {submitStatus === "submitting" ? "ENVIANDO SOLICITUD..." : "ENVIAR SOLICITUD DE TUTOR"}
                 </button>
               </form>
             )}
