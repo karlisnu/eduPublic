@@ -22,7 +22,7 @@ function Dashboard({ user, authError, onLogout, onSessionExpired }) {
   const fetchTutors = useTutorsStore((store) => store.fetchAll);
   const [tutorSearchRetry, setTutorSearchRetry] = useState(0);
   const [approvals, setApprovals] = useState([]);
-  const [approhvalsLoading, setApprovalsLoading] = useState(false);
+  const [approvalsLoading, setApprovalsLoading] = useState(false);
   const [approvalsError, setApprovalsError] = useState("");
   const [requestTutor, setRequestTutor] = useState(null);
   const [requestSubject, setRequestSubject] = useState("");

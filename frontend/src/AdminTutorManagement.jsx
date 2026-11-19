@@ -38,7 +38,6 @@ function AdminTutorManagement({ onSessionExpired }) {
 
   const saveTutor = async (event) => {
     event.preventDefault();
-    if (submitStatus === "submitting") return;
     setSubmitStatus("submitting");
     setSubmitMessage("");
     try {
@@ -138,7 +137,7 @@ function AdminTutorManagement({ onSessionExpired }) {
                   Disponible para solicitudes
                 </label>
                 <div className="approval-actions">
-                  <button type="submit" disabled={submitStatus === "submitting"}>
+                  <button type="submit">
                     {submitStatus === "submitting" ? "Guardando..." : "Guardar"}
                   </button>
                   <button type="button" onClick={() => setEditingTutorId(null)} disabled={submitStatus === "submitting"}>

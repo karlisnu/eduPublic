@@ -92,7 +92,8 @@ function TutorManagementPage({ onSessionExpired }) {
   useEffect(() => {
     const controller = new AbortController();
     void loadWeek(controller.signal);
-    return () => controller.abort();
+// return () => controller.abort();
+
   }, [loadWeek, retryAttempt]);
 
   const occupied = useMemo(() => new Set(
