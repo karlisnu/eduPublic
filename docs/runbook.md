@@ -15,6 +15,10 @@ antiguos de `Alumnos/html/` y `js/` no son la interfaz React activa.
 
 ## Reglas de seguridad y cambios de datos
 
+- Las reglas funcionales vigentes están en
+  [business-rules.md](./business-rules.md). Si una instrucción operativa parece
+  contradecirlas, no inventes una excepción: confirma la discrepancia antes de
+  cambiar datos o permisos.
 - No ejecutes `npm --prefix backend run db:seed` ni `db:setup` en producción:
   cargan cuentas y registros exclusivamente de demostración. El seed se
   bloqueará si `NODE_ENV=production`, pero esa protección no reemplaza una
@@ -36,6 +40,9 @@ antiguos de `Alumnos/html/` y `js/` no son la interfaz React activa.
 - No guardes secretos en el repositorio, en el frontend ni en logs. La
   aplicación no incluye registro público de administradores: provisiona la
   cuenta inicial mediante un procedimiento controlado fuera de la aplicación.
+- No uses datos personales reales ni archivos académicos reales al exponer el
+  frontend mediante un túnel público temporal. Los archivos deben seguir
+  protegidos por autorización del backend y no por enlaces públicos.
 - Para cualquier entorno de producción se requiere HTTPS. Configura el origen
   real del frontend y los secretos en el gestor de configuración de la
   plataforma; nunca copies credenciales de desarrollo.

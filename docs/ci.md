@@ -42,6 +42,13 @@ estén cubiertos por pruebas de integración: las pruebas existentes también
 contienen pruebas unitarias, y los siguientes incrementos deben añadir pruebas
 de integración para operaciones y permisos de negocio relevantes.
 
+Al añadir o modificar flujos, usa [`business-rules.md`](./business-rules.md)
+como criterio de las pruebas. Comprueba los permisos y el estado de aprobación
+en el backend, la autorización según conexión y participantes, y los casos
+negativos; ocultar una acción en la interfaz no demuestra que la API la proteja.
+No presentes las reglas como cubiertas por CI si no existe una prueba que las
+verifique.
+
 ## Ejecución local
 
 Con dependencias instaladas, Node.js 22 y MySQL accesible con la configuración

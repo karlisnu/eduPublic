@@ -3,6 +3,9 @@
 ## Propósito
 
 Este documento describe el modelo relacional de datos usado por EduMatch. El esquema ejecutable de MySQL está disponible en [`backend/sql/schema.sql`](../backend/sql/schema.sql).
+Los requisitos de dominio aprobados están en
+[`business-rules.md`](./business-rules.md); este modelo describe su representación
+actual en la base de datos.
 
 EduMatch conecta a estudiantes y tutores aprobados, admite la entrega de archivos académicos y separa las calificaciones de los tutores de las evaluaciones que los tutores hacen de los estudiantes. La plataforma no incluye mensajería ni chat interno.
 
@@ -170,7 +173,7 @@ erDiagram
 2. Un tutor debe tener un perfil de tutor aprobado y solo puede aparecer en búsquedas cuando `is_available = TRUE`.
 3. Un archivo solo puede enviarse de un tutor a un estudiante a través de su conexión.
 4. Una calificación del estudiante evalúa a un tutor; no es lo mismo que una evaluación del estudiante.
-5. Las calificaciones, evaluaciones y archivos deben autorizarse con una conexión existente entre estudiante y tutor en el backend.
+5. Las calificaciones, evaluaciones y archivos deben autorizarse en el backend usando la conexión correcta, sus participantes y su estado. Una clave foránea o la mera existencia de una conexión no autoriza la operación.
 6. EduMatch solo almacena hashes para las cuentas con contraseña propia, como la administración. Las credenciales institucionales las valida Microsoft y EduMatch nunca las recibe ni las guarda.
 7. La base de datos no tiene entidad de mensaje, conversación ni chat.
 8. Nombres de usuario y nombres de perfiles solo aceptan letras. El correo debe tener formato válido, sin espacios y ser único.
@@ -179,6 +182,10 @@ erDiagram
 11. Las materias que imparte un tutor deben estar vinculadas a su carrera en `career_subjects` y corresponder a su semestre actual o uno anterior. Las solicitudes nuevas incluyen promedio reportado de 0 a 100 y quedan pendientes de revisión administrativa. No se deben inventar materias ni semestres; el alta se bloquea hasta cargar el plan oficial.
 12. Biografía y experiencia de tutor: máximo 100 caracteres cada una. Comentarios de calificaciones y evaluaciones: máximo 50 caracteres. Las calificaciones conservan `created_at` y no tienen actualización automática.
 13. El administrador es una cuenta de `users` con rol `admin`; no requiere una tabla de contraseñas separada ni registro público. El administrador inicial se provisiona por un proceso controlado fuera de la aplicación pública. Solo administradores autenticados pueden modificar perfiles o crear eventos de aprobación; el backend debe autorizarlo.
+14. Los estados de conexión se almacenan como `pending`, `accepted`, `rejected` y `ended`. Las reglas de negocio describen como `Finished` la relación concluida; `ended` es el valor guardado en la base de datos. El backend debe exigir el estado adecuado para cada operación.
+15. Se deben prevenir solicitudes duplicadas de tutoría mientras haya otra solicitud equivalente pendiente o una conexión activa, según las condiciones definidas en las reglas de negocio.
+16. Los archivos académicos deben cumplir los formatos y límites de tamaño permitidos y mantenerse protegidos por autorización del backend. No se deben exponer mediante enlaces públicos sin protección.
+17. Las decisiones de cuenta se registran en `approval_events` con el usuario afectado, el administrador revisor, la decisión y la fecha. Las modificaciones administrativas importantes de perfiles y catálogos también requieren un registro auditable; no se debe asumir que la tabla de aprobaciones ya cubre esas acciones.
 
 ## ¿Por qué existen archivos Markdown y SQL?
 

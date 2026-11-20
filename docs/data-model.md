@@ -4,6 +4,9 @@
 
 This document describes the relational data model used by EduMatch. The executable
 MySQL schema is available in [`backend/sql/schema.sql`](../backend/sql/schema.sql).
+The approved domain requirements are in
+[`business-rules.md`](./business-rules.md); this model describes their current
+database representation.
 
 EduMatch connects approved students and tutors, supports academic file delivery,
 and separates tutor ratings from tutor evaluations of students. The platform does
@@ -174,8 +177,9 @@ erDiagram
    `is_available = TRUE`.
 3. A file can only be sent from a tutor to a student through their connection.
 4. A student rating evaluates a tutor; it is not the same as a student evaluation.
-5. Ratings, evaluations, and files must be authorized against an existing
-   student-tutor connection in the backend.
+5. Ratings, evaluations, and files must be authorized in the backend against the
+   correct student-tutor connection, its participants, and its status. A foreign
+   key or an existing connection row alone does not authorize an operation.
 6. EduMatch stores only password hashes for application-managed accounts such as administrators. Institutional credentials are validated by Microsoft and are never received or stored by EduMatch.
 7. The database has no message, conversation, or chat entity.
 8. Usernames and profile names contain letters only; emails must have a valid structure, contain no whitespace, and remain unique.
@@ -184,6 +188,10 @@ erDiagram
 11. Tutor subject selections must be mapped to their career at or before the tutor's current semester in `career_subjects`. New tutor applications include a reported average from 0 to 100 and remain pending administrative review. Do not add guessed curriculum rows; tutor signup stays blocked until the official mapping is loaded.
 12. Tutor bio and experience are each limited to 100 characters. Tutor ratings and student evaluation comments are limited to 50 characters. Tutor ratings retain `created_at` but have no automatic update timestamp.
 13. Administrator accounts use `users.role = 'admin'`; there is no separate password-bearing administrator table or public administrator registration. Provision the initial administrator through a controlled process outside the public application. Only authenticated administrators may modify student/tutor data or create approval events, enforced by backend authorization.
+14. Connection statuses are stored as `pending`, `accepted`, `rejected`, and `ended`. The business rules describe the completed relationship as `Finished`; `ended` is the database value. The backend must apply the status appropriate to each operation.
+15. Prevent duplicate tutoring requests while an equivalent request is pending or an active connection exists, following the conditions defined by the business rules.
+16. Academic files must satisfy the allowed format and size limits and remain protected by backend authorization. Do not expose downloads through unprotected public links.
+17. Account decisions are recorded in `approval_events` with the affected user, reviewing administrator, decision, and time. Important administrative changes to profiles and catalogs also require an auditable record; do not assume the approval table covers those changes.
 
 ## Why there are both Markdown and SQL files
 

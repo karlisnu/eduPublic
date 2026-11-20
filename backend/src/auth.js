@@ -35,14 +35,13 @@ function createRequireAuthentication(pool) {
 
     try {
       const [rows] = await pool.query(
-        `SELECT u.id, u.username, u.role
+        `SELECT u.id, u.username, u.role, u.account_status,
+                tp.application_status
          FROM auth_sessions s
          INNER JOIN users u ON u.id = s.user_id
          LEFT JOIN tutor_profiles tp ON tp.user_id = u.id
          WHERE s.token_hash = ?
            AND s.expires_at > NOW()
-           AND u.account_status = 'approved'
-           AND (u.role <> 'tutor' OR tp.application_status = 'approved')
          LIMIT 1`,
         [hashSessionToken(token)],
       );
@@ -51,10 +50,20 @@ function createRequireAuthentication(pool) {
         return response.status(401).json({ error: "La sesión expiró o la cuenta no está habilitada" });
       }
 
+      const account = rows[0];
+      if (account.account_status && account.account_status !== "approved") {
+        return response.status(403).json({ error: "Tu cuenta aún no está aprobada para acceder" });
+      }
+      if (account.role === "tutor" &&
+          account.application_status &&
+          account.application_status !== "approved") {
+        return response.status(403).json({ error: "La solicitud de tutor aún no está aprobada" });
+      }
+
       request.auth = {
-        id: rows[0].id,
-        username: rows[0].username,
-        role: rows[0].role,
+        id: account.id,
+        username: account.username,
+        role: account.role,
       };
       return next();
     } catch (error) {
@@ -75,12 +84,29 @@ function requireRoles(...roles) {
   };
 }
 
+function requireApprovedAccount(request, response, next) {
+  if (!request.auth) {
+    return response.status(401).json({ error: "Inicia sesión para continuar" });
+  }
+  if (request.auth.accountStatus !== undefined &&
+      request.auth.accountStatus !== "approved") {
+    return response.status(403).json({ error: "Tu cuenta aún no está aprobada para acceder" });
+  }
+  if (request.auth.role === "tutor" &&
+      request.auth.applicationStatus !== undefined &&
+      request.auth.applicationStatus !== "approved") {
+    return response.status(403).json({ error: "La solicitud de tutor aún no está aprobada" });
+  }
+  return next();
+}
+
 module.exports = {
   SESSION_MAX_AGE_SECONDS,
   clearSessionCookie,
   createRequireAuthentication,
   hashSessionToken,
   readSessionToken,
+  requireApprovedAccount,
   requireRoles,
   sessionCookie,
 };

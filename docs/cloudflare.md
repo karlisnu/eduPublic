@@ -1,4 +1,10 @@
 
+> **Seguridad:** este túnel publica temporalmente la interfaz en Internet. Úsalo
+> solo para desarrollo con cuentas y datos ficticios; no compartas datos
+> personales ni archivos académicos reales. Los archivos deben seguir
+> requiriendo autorización del backend y no deben exponerse mediante enlaces
+> públicos sin protección.
+
 ### 1. Instalar `cloudflared`
 En Linux x64, descarga e instala la herramienta:
 

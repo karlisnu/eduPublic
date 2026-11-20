@@ -6,6 +6,7 @@ const {
   createRequireAuthentication,
   hashSessionToken,
   readSessionToken,
+  requireApprovedAccount,
   requireRoles,
   sessionCookie,
 } = require("../src/auth");
@@ -107,6 +108,69 @@ test("role middleware allows only explicitly permitted roles", () => {
 
   let nextCalled = false;
   authorizeAdmin({ auth: { role: "admin" } }, mockResponse(), () => { nextCalled = true; });
+  assert.equal(nextCalled, true);
+});
+
+test("authentication middleware denies pending and rejected accounts", async () => {
+  const token = "f".repeat(64);
+  const pool = {
+    query: async () => [[{
+      id: 8,
+      username: "Pendiente",
+      role: "alumno",
+      account_status: "pending",
+    }]],
+  };
+  const response = mockResponse();
+
+  await createRequireAuthentication(pool)(
+    { headers: { cookie: `edumatch_session=${token}` } },
+    response,
+    () => assert.fail("must reject an unapproved account"),
+  );
+
+  assert.equal(response.statusCode, 403);
+  assert.match(response.body.error, /aprobada/i);
+});
+
+test("tutor application approval is required independently of account approval", async () => {
+  const token = "1".repeat(64);
+  const pool = {
+    query: async () => [[{
+      id: 9,
+      username: "TutorPendiente",
+      role: "tutor",
+      account_status: "approved",
+      application_status: "pending",
+    }]],
+  };
+  const response = mockResponse();
+
+  await createRequireAuthentication(pool)(
+    { headers: { cookie: `edumatch_session=${token}` } },
+    response,
+    () => assert.fail("must reject a tutor with a pending application"),
+  );
+
+  assert.equal(response.statusCode, 403);
+  assert.match(response.body.error, /tutor/i);
+});
+
+test("approved-account middleware rejects unapproved status fields", () => {
+  const forbiddenResponse = mockResponse();
+  requireApprovedAccount(
+    { auth: { role: "alumno", accountStatus: "pending" } },
+    forbiddenResponse,
+    () => assert.fail("must reject pending account"),
+  );
+  assert.equal(forbiddenResponse.statusCode, 403);
+
+  let nextCalled = false;
+  requireApprovedAccount(
+    { auth: { role: "alumno", accountStatus: "approved" } },
+    mockResponse(),
+    () => { nextCalled = true; },
+  );
   assert.equal(nextCalled, true);
 });
 

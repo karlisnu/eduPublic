@@ -1,165 +1,179 @@
-# Project Context: EduMatch
+# EduMatch - Copilot Instructions
 
-EduMatch is a web platform that connects students and tutors for academic guidance,
-tutor discovery by subject, file sharing, and performance evaluation. The project is
-in the integration phase, transitioning from a frontend prototype to a full-stack
-system.
+## 1. Project Context
+EduMatch es una plataforma que conecta estudiantes con tutores para facilitar la búsqueda de apoyo académico.
+El sistema permite gestionar cuentas, perfiles, materias, disponibilidad de tutores, conexiones entre estudiantes y tutores, archivos, calificaciones y administración.
+Copilot debe comprender el contexto del proyecto antes de proponer o realizar cambios.
+### General Requirements
+•	Respetar la arquitectura y estructura existente del proyecto.
+•	Reutilizar componentes, servicios, modelos y funciones existentes cuando sea posible.
+•	Evitar duplicar lógica de negocio.
+•	No introducir funcionalidades que no estén contempladas en los requisitos.
+•	No inventar información institucional, académica o administrativa.
+•	No implementar funcionalidades que contradigan las reglas del negocio.
+## 2. Documentation and Sources of Truth
+Antes de implementar cualquier cambio, consultar la documentación relacionada con la funcionalidad.
+Documentación principal:
+•	`docs/architecture.md`: arquitectura, componentes y límites actuales de integración.
+•	`docs/data-model-es.md`, `backend/sql/schema.sql` y `backend/sql/migrations/`: modelo de datos y cambios del esquema.
+•	`docs/backlog/`: tarjetas, requisitos y Acceptance Criteria, solo si existe contenido aplicable.
+•	`backend/src/` y `frontend/src/`: implementación y convenciones vigentes; revisar junto con los requisitos, no asumir que el comportamiento actual define por sí solo la regla de negocio.
+### Documentation Rules
+•	Las reglas de negocio tienen prioridad sobre las suposiciones del agente.
+•	Cada implementación debe respetar las reglas relacionadas con su tarjeta.
+•	Consultar los Acceptance Criteria antes de comenzar una implementación.
+•	No modificar las reglas de negocio sin autorización explícita.
+•	Si existe información contradictoria, detener la implementación y solicitar aclaración.
+•	No inventar requisitos para completar información faltante.
+•	No asumir que un archivo o catálogo documental existe si no está presente en el repositorio.
+•	No inventar carreras, campus, materias ni planes académicos; usar únicamente fuentes oficiales verificables y señalar cualquier dato pendiente de confirmación.
+## 3. Backlog Management
+Cuando una solicitud esté vinculada a una tarjeta, seguir su alcance y Acceptance Criteria. Si el trabajo requiere una tarjeta y no se proporcionó o no se encuentra, pedir aclaración en vez de inventarla. No bloquear una corrección pequeña y explícita solo porque no exista una tarjeta accesible.
+### Card Types
+•	Goal: objetivo general que agrupa varias funcionalidades.
+•	Feature: funcionalidad nueva del sistema.
+•	Task: trabajo técnico o actividad necesaria para implementar una funcionalidad.
+•	Bug: comportamiento incorrecto que necesita corregirse.
+### Priority Levels
+•	P1 - High: prioridad alta. Funcionalidades esenciales, seguridad o problemas críticos.
+•	P2 - Medium: prioridad media. Funcionalidades importantes que complementan el sistema.
+•	P3 - Low: prioridad baja. Mejoras secundarias o ajustes que pueden esperar.
+### Backlog Rules
+•	No crear tarjetas duplicadas.
+•	Mantener los IDs existentes.
+•	Cada tarjeta debe tener una Description clara.
+•	Cada tarjeta debe incluir Acceptance Criteria verificables.
+•	Identificar las Dependencies antes de implementar.
+•	No cambiar el Type o Priority sin justificación.
+•	Dividir las Features grandes en Tasks cuando sea necesario.
+•	No marcar una tarjeta como Done si sus Acceptance Criteria no se cumplen.
+### Registro de errores y nuevos requerimientos durante la implementación
+Cuando trabajes en una tarjeta del backlog y durante el análisis o la implementación detectes un error, problema, funcionalidad faltante, dependencia o nuevo requerimiento que no esté contemplado en la tarjeta original, deberás:
 
-**Important product constraint:** EduMatch does not include internal messaging or
-chat functionality. Do not introduce message inboxes, chat flows, or student-tutor
-messaging endpoints. Connections and file sharing must use the explicitly supported
-platform flows only.
+1. No ignorar el hallazgo: identifica y analiza qué ocurrió y cómo afecta al proyecto.
+2. Crear una nueva tarjeta en el backlog: registra el error o requerimiento como una tarjeta independiente, utilizando el tipo correspondiente (Bug, Feature, Task o Goal). Debes agregarla directamente al archivo `docs/backlog.md`, respetando su estructura y formato actuales.
+3. Documentar toda la información necesaria: incluye:
+   - Identificador único y título.
+   - Tipo de tarjeta.
+   - Prioridad.
+   - Estado.
+   - Dependencia.
+   - Descripción.
+   - Reglas de negocio.
+   - Criterios de aceptación.
+4. Relacionar las tarjetas: indica de qué tarjeta surgió el hallazgo y establece la dependencia correspondiente si es necesaria.
+5. Actualizar el estado: no marques la nueva tarjeta como Ready hasta que cumpla con la Definition of Ready.
+6. Informar al usuario: explica qué encontraste, qué tarjeta creaste y confirma que quedó agregada a `docs/backlog.md`.
 
-# Tech Stack and Environment
+No agregues problemas hipotéticos como si fueran errores reales. Si no puedes confirmar la causa o el comportamiento, documenta el hallazgo como pendiente de investigación.
 
-- Frontend: React 19, React DOM, JSX, Vite, and CSS. The active frontend lives in
-  `frontend/src/`; `Alumnos/html/` and `js/` are legacy static prototype assets.
-- Backend: Node.js.
-- Database: MySQL.
-- Development environment: Dev Containers (Docker) and WSL 2.
-- Workflow: GitFlow and Scrum methodologies.
-
-# Project Overview and User Roles
-
-EduMatch has three distinct roles. Authentication, authorization, routing, dashboards,
-and available actions must remain separate for each role. Use the backend's
-pre-configured authentication and security libraries rather than creating parallel
-security mechanisms.
-
-## 1. Student Module (`Alumnos`)
-
-- **Tutor discovery:** Students can search for tutors filtered by the subjects they
-  teach, view each tutor's basic description, and review tutor ratings before making
-  a selection.
-- **Connections and file reception:** Support the designed flows for students to
-  connect with tutors and receive academic files or resources sent exclusively by
-  those tutors. This is not a messaging feature.
-- **Ratings:** Display the ratings assigned to tutors.
-- **Account validation:** Every new student registration must be validated and
-  approved by an administrator before the student receives full platform access.
-
-## 2. Tutor Module (`Tutores`)
-
-- **Student management:** Tutors can view assigned students, review and accept new
-  students into their roster, and manage their connections.
-- **File transmission:** Tutors can share and send academic files directly to their
-  assigned or accepted students. File transmission must not be implemented as a
-  chat or messaging channel.
-- **Student evaluation:** Provide a dedicated section for tutors to grade and qualify
-  their students' academic performance.
-
-## 3. Administrator Module (`Administradores`)
-
-- **Secure access:** Administrators use a protected login entry point backed by the
-  backend's standard authentication and security libraries.
-- **Elevated privileges and control panel:** Administrators can accept or reject new
-  tutor applications and validate or approve newly registered students.
-- **Structural and action management:** Administrators can reorganize, manage, and
-  coordinate platform structures, permissions, and user actions.
-
-# Code Generation Rules and Business Logic
-
-1. **Role separation and authorization**
-   - Treat Student, Tutor, and Administrator as separate roles with least-privilege
-     access.
-   - Enforce authorization on the backend as well as hiding or guarding frontend
-     routes and actions. Never rely on client-side role checks alone.
-   - Preserve distinct registration, approval, login, navigation, and dashboard
-     flows for each role.
-   - A pending student or tutor must not gain the privileges of an approved account.
-   - Do not add internal messaging capabilities under any role.
-
-2. **Authentication and security**
-   - Reuse the backend's pre-configured authentication and security libraries,
-     middleware, and conventions.
-   - Protect administrator routes and all role-sensitive APIs with authenticated,
-     server-side authorization.
-   - Validate authentication state, account approval state, and role before allowing
-     access to protected resources.
-   - Use secure file-access controls so students can receive files only through
-     permitted tutor connections and tutors can send files only to permitted
-     students.
-   - Use parameterized MySQL queries for all user, profile, connection, rating,
-     evaluation, approval, and file metadata operations. Never interpolate
-     untrusted input into SQL.
-
-3. **Frontend and file structure**
-   - Treat `frontend/src/` as the active React frontend and preserve its Vite entry
-     point and component structure.
-   - Treat `Alumnos/html/` and `js/` as legacy prototype assets unless the task
-     explicitly targets them.
-   - Keep the design strictly responsive (FR-10) and follow UI/UX best practices
-     (NFR-01) for intuitive navigation.
-   - Use the existing `/api` Vite proxy for local development requests to the Node.js
-     backend.
-
-4. **Validation and account lifecycle**
-   - Implement strict client-side validation in React registration and login forms,
-     including required fields and correct data formats (FR-09).
-   - Repeat all security-sensitive validation on the backend; client-side validation
-     is not a security boundary.
-   - Represent student approval and tutor application decisions explicitly, including
-     pending, approved, and rejected states as supported by the backend.
-   - Surface validation, authentication, authorization, upload, and approval errors
-     clearly instead of silently falling back to success.
-
-5. **Domain behavior**
-   - Keep tutor search scoped to the subjects tutors teach and expose only the
-     intended basic profile information and ratings.
-   - Keep student-tutor connections distinct from messaging. Do not add message
-     entities, message APIs, chat components, or communication assumptions.
-   - Restrict academic file transmission to tutor-to-student flows, with appropriate
-     ownership and authorization checks.
-   - Keep tutor evaluations of students separate from student-visible tutor ratings;
-     preserve the direction and permissions of each action.
-
-6. **Code quality and integration**
-   - Write modular, scalable React/JavaScript code (NFR-06) using existing helpers,
-     patterns, and types where available.
-   - Preserve type safety and existing behavior when extending the application.
-   - Name variables and functions descriptively in English, reflecting the business
-     rules (for example, `searchTutorBySubject()` and
-     `validateStudentRegistration()`).
-   - Keep comments, documentation, and code explanations in English.
-
-7. **Database tables and field validation**
-   - Apply validation in the UI and repeat it in the backend. Enforce uniqueness and
-     referential rules in MySQL where appropriate; never treat client-side checks as
-     proof that a value is valid.
-   - In `usuarios`, restrict usernames to letters only (including accented letters),
-     validate email format, reject whitespace in email addresses, and keep emails
-     unique. Store passwords only as secure hashes. Keep the role, including the
-     administrator role, on the user account.
-   - Keep the student's enrollment number (`numero_estudiante` / student number) in
-     `perfiles_estudiantes`; require exactly 11 digits and prevent duplicates.
-     Verify that the number actually exists using an authoritative Universidad de
-     Sonora data source or verification process when available. Numeric format and
-     uniqueness alone do not prove enrollment; never invent or simulate this check.
-   - In `perfiles_estudiantes`, allow letters (including accents) only in first and
-     last names. Career and campus must be selected from existing, authoritative
-     database catalog values, enforced with references where supported; do not
-     hard-code a presumed catalog or represent catalog membership with booleans.
-     Require the phone format specified for this project: digits only, exactly 11
-     digits total, including the telephone/area prefix.
-   - In `perfiles_tutores`, allow letters (including accents) only in first and last
-     names; limit bio and experience to 100 characters each. Remove the textual
-     `availability` field as requested, but preserve `esta_disponible` if it is used
-     as the tutor's availability control.
-   - In `materias`, preserve existing subject names; do not rename or rewrite them.
-     Limit each subject description to 100 words.
-   - In `calificaciones_tutores`, limit the review/comment string to 50 characters.
-     Remove the `created_IUpdate` function or automatic created/updated behavior if
-     present; do not add a replacement without an explicit requirement.
-   - In `evaluaciones_estudiantes`, limit `comentarios` to 50 characters. In
-     `archivos_academicos`, remove `main_type` if present while retaining any
-     separate MIME-type validation needed for safe file handling.
-   - Administrators must be represented by a `usuarios` account with the
-     administrator role and use the existing authentication system. If an
-     `administradores` table is required, link it one-to-one to `usuarios` and do not
-     duplicate passwords or authentication data. Do not provide public administrator
-     registration; provision the initial administrator through a controlled process
-     outside the public application.
-   - Only authenticated administrators may modify student or tutor records, enforced
-     on the backend. Link approval actions in `eventos_aprobacion` to the affected
-     user and to the reviewing administrator (`id_revisor`); retain an auditable
-     record of approval decisions.
+No amplíes el alcance de la tarjeta original sin autorización. Continúa con el trabajo solicitado siempre que sea posible y seguro hacerlo.
+## 4. Implementation Workflow
+Seguir este flujo antes y durante cada implementación:
+1.	Identify: identificar la tarjeta y comprender su objetivo.
+2.	Review: consultar las reglas del negocio y documentación relacionada.
+3.	Inspect: revisar la estructura del proyecto y el código existente.
+4.	Plan: revisar `git status`, identificar archivos afectados, cambios locales existentes, Dependencies y posibles riesgos.
+5.	Implement: realizar los cambios necesarios sin alterar funcionalidades ajenas.
+6.	Validate: ejecutar pruebas y comprobar los Acceptance Criteria.
+7.	Report: explicar los cambios realizados, archivos afectados y resultados de las pruebas.
+### Important
+•	No comenzar a programar sin comprender el alcance y los criterios verificables de la tarea o tarjeta.
+•	No implementar funcionalidades adicionales por iniciativa propia.
+•	Si una tarea depende de otra que todavía no está implementada, informar antes de continuar.
+•	Si se requiere una decisión de negocio, solicitar autorización.
+•	Evitar modificaciones innecesarias en archivos que no pertenecen al alcance de la tarjeta.
+•	Preservar los cambios locales preexistentes; no descartarlos ni sobrescribirlos. No incluir cambios ajenos al alcance al preparar un commit.
+•	No crear commits, hacer push ni abrir Pull Requests salvo que el usuario lo solicite explícitamente.
+## 5. Architecture and Code Quality
+•	Respetar los patrones arquitectónicos existentes.
+•	Mantener la separación de responsabilidades.
+•	Evitar duplicación de código.
+•	Utilizar nombres descriptivos y consistentes.
+•	Mantener funciones y métodos con responsabilidades específicas.
+•	Reutilizar servicios y validaciones existentes.
+•	Evitar dependencias innecesarias.
+•	No cambiar tecnologías, frameworks o estructura del proyecto sin autorización.
+•	No eliminar código existente sin comprobar sus dependencias.
+## 6. Backend and Business Logic
+•	Las reglas de negocio deben validarse en el Backend.
+•	No confiar exclusivamente en las validaciones del Frontend.
+•	Validar los datos recibidos antes de procesarlos.
+•	Verificar la identidad y los permisos del usuario en operaciones protegidas.
+•	Comprobar la propiedad de los recursos antes de permitir su modificación o consulta.
+•	Evitar accesos no autorizados mediante manipulación de IDs.
+•	Utilizar respuestas HTTP adecuadas.
+•	Mantener la integridad de los datos.
+•	Evitar exponer información sensible en las respuestas de la API.
+## 7. Authentication and Security
+•	No almacenar contraseñas en texto plano.
+•	Utilizar mecanismos seguros de Hashing para cuentas con contraseña propia.
+•	La autenticación institucional debe delegarse a Microsoft.
+•	Nunca solicitar ni almacenar contraseñas institucionales porque solo funciona con Microsoft para el flujo de entrada y creación de alumnos y tutores.
+•	Validar los tokens de autenticación.
+•	Aplicar autorización en cada operación protegida.
+•	No exponer secretos, API Keys, tokens o credenciales en el código.
+•	Utilizar variables de entorno para configuraciones sensibles.
+•	No considerar que ocultar elementos de la interfaz equivale a proteger una funcionalidad.
+## 8. Database and Data Integrity
+•	Revisar los modelos y relaciones existentes antes de modificar la base de datos.
+•	Respetar las Foreign Keys y restricciones existentes.
+•	Evitar duplicar entidades o relaciones.
+•	Utilizar migraciones para cambios en el esquema cuando corresponda.
+•	No eliminar datos históricos sin autorización.
+•	Mantener los registros relacionados correctamente.
+•	No inventar tablas, columnas o relaciones sin justificar su necesidad.
+•	No implementar entidades de mensajes, conversaciones o chat, ya que no forman parte del alcance actual de EduMatch.
+## 9. Validation and Testing
+Cada implementación debe contar con validaciones y pruebas adecuadas a su alcance.
+### Testing Requirements
+•	Crear o actualizar Unit Tests cuando corresponda.
+•	Implementar Integration Tests para operaciones que involucren varios componentes.
+•	Probar casos válidos e inválidos.
+•	Verificar permisos y accesos no autorizados.
+•	Probar los límites de las validaciones.
+•	Comprobar que los cambios no rompan funcionalidades existentes.
+•	No eliminar pruebas para conseguir que una ejecución sea exitosa.
+•	No afirmar que las pruebas pasaron si no fueron ejecutadas correctamente.
+### Acceptance Criteria Validation
+Antes de considerar una tarjeta terminada:
+•	Comprobar cada Acceptance Criteria.
+•	Ejecutar las pruebas relacionadas.
+•	Corregir los errores encontrados.
+•	Informar cualquier criterio que no pudo verificarse.
+## 10. Code Changes and Pull Requests
+•	Realizar cambios pequeños y relacionados con la tarjeta asignada.
+•	Evitar modificar archivos que no sean necesarios.
+•	Mantener consistencia con el estilo del repositorio.
+•	No incluir credenciales, archivos temporales o información sensible en los commits.
+•	Proporcionar una descripción clara de los cambios.
+•	Relacionar los Pull Requests con sus tarjetas correspondientes.
+•	No considerar un Pull Request terminado únicamente porque el código compila.
+## 11. Definition of Ready (DoR)
+Una tarjeta está Ready cuando:
+•	Su Description es clara.
+•	Sus Acceptance Criteria están definidos.
+•	Las reglas del negocio relacionadas están identificadas.
+•	Sus Dependencies están disponibles o resueltas.
+•	No existen dudas importantes que bloqueen su implementación.
+## 12. Definition of Done (DoD)
+Una tarjeta está Done cuando:
+•	La implementación cumple sus Acceptance Criteria.
+•	Respeta las reglas del negocio.
+•	Las pruebas correspondientes fueron ejecutadas.
+•	No existen errores conocidos relacionados con el cambio.
+•	El código mantiene la arquitectura y convenciones del proyecto.
+•	La documentación fue actualizada cuando corresponde.
+•	Los cambios fueron revisados y aprobados mediante el flujo de trabajo establecido.
+## 13. Agent Behavior
+Copilot debe actuar como un asistente de desarrollo que prioriza la consistencia, seguridad y mantenibilidad del proyecto.
+•	No asumir requisitos que no estén documentados.
+•	No inventar información.
+•	No modificar reglas del negocio por iniciativa propia.
+•	Explicar las decisiones técnicas importantes.
+•	Informar riesgos y limitaciones.
+•	Solicitar aclaraciones cuando falte información esencial.
+•	Priorizar soluciones simples y mantenibles.
+•	Trabajar únicamente dentro del alcance autorizado.
+### Main Principle
+Every implementation must follow the project documentation, respect the business rules, satisfy the Acceptance Criteria and preserve the existing architecture.

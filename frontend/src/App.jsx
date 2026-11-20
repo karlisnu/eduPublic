@@ -132,6 +132,21 @@ function App() {
   }
 
   if (user) {
+    if (!["alumno", "tutor", "admin"].includes(user.role)) {
+      return (
+        <main className="login-page">
+          <div className="form-content">
+            <h1>Acceso denegado</h1>
+            <p className="login-error" role="alert">
+              Tu cuenta no tiene un rol autorizado para ingresar a EduMatch.
+            </p>
+            <button type="button" className="microsoft-login-button" onClick={handleLogout}>
+              Cerrar sesión
+            </button>
+          </div>
+        </main>
+      );
+    }
     return (
       <Dashboard
         user={user}
