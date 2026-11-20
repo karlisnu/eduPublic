@@ -20,8 +20,8 @@ separation and approved business rules.
 - **Priority:** P1 - High / P2 - Medium / P3 - Low
 - **Status:** Backlog
 - **Dependencies:** None / list the backlog cards or external prerequisites
-- **Responsible:** 
-- **Target milestone:** 
+- **Responsible:**
+- **Target milestone:**
 
 ## Description
 
